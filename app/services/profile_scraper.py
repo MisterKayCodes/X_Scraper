@@ -56,10 +56,22 @@ async def scrape_profile_media(username: str, user_id: int, limit: int = 20, sta
                 pass
 
         if status_callback: await status_callback(f"🌐 **STATUS:** Opening Chromium (Cookies Loaded: {has_cookies})...")
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--disable-blink-features=AutomationControlled"]
-        )
+        print("[RADAR] Launching Chromium...")
+        try:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage"
+                ]
+            )
+            print("[RADAR] Browser launched successfully.")
+        except Exception as launch_err:
+            print(f"[🚨] Browser Launch Failed: {launch_err}")
+            if status_callback: await status_callback(f"❌ **Radar Failure:** Browser launch error on VPS.")
+            return []
         
         context_args = {
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -69,8 +81,10 @@ async def scrape_profile_media(username: str, user_id: int, limit: int = 20, sta
             context_args["storage_state"] = cookie_path
             
         context = await browser.new_context(**context_args)
+        print("[RADAR] Context created with cookies.")
         
         page = await context.new_page()
+        print("[RADAR] Page object created.")
         # Apply anti-bot stealth mask
         # Note: If stealth(page) fails, we'll try to find the right import in the test
         try:
