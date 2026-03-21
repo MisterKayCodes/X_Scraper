@@ -1,5 +1,12 @@
 import os
+import socket
+import urllib3.util.connection as urllib3_cn
 from dotenv import load_dotenv
+
+# Fix Python requests 15-second DNS IPv6 timeout on Windows
+def allowed_gai_family():
+    return socket.AF_INET
+urllib3_cn.allowed_gai_family = allowed_gai_family
 
 # Load environment variables from .env file
 load_dotenv()

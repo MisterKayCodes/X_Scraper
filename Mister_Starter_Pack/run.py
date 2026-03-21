@@ -20,7 +20,6 @@ def kill_ghosts():
     print("[...] Searching for and terminating ghost processes...")
     try:
         if os.name == 'nt':
-            # Safely target only python processes running main.py utilizing WMI in Powershell
             cmd = "powershell -Command \"Get-WmiObject Win32_Process -Filter \\\"Name='python.exe'\\\" | Where-Object { $_.CommandLine -ne $null -and $_.CommandLine -match 'main.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }\""
             subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         else:
@@ -29,7 +28,6 @@ def kill_ghosts():
         print("[OK] Ghost processes cleared.")
     except Exception as e:
         print(f"[!] Failed to kill ghosts: {e}")
-
 
 if __name__ == "__main__":
     if run_inspector():

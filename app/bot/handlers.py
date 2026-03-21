@@ -47,10 +47,13 @@ async def x_link_handler(message: types.Message):
         if download_file(m_url, final_path, HEADERS, quiet=True):
             # Send to user
             file_input = types.FSInputFile(str(final_path))
+            
+            media_caption = f"{caption}\n\n🎥 Item {i+1}" if len(media_list) > 1 else caption
+            
             if "video" in m_type:
-                await message.answer_video(file_input, caption=f"🎥 Item {i+1}" if len(media_list) > 1 else None)
+                await message.answer_video(file_input, caption=media_caption)
             else:
-                await message.answer_photo(file_input, caption=f"📸 Item {i+1}" if len(media_list) > 1 else None)
+                await message.answer_photo(file_input, caption=media_caption)
         else:
             await message.answer(f"⚠️ Failed to download item {i+1}")
 

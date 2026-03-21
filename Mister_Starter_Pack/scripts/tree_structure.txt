@@ -1,0 +1,34 @@
+app/
+    bot/
+        __init__.py
+        handlers.py # Telegram command and message handlers
+        keyboards.py # UI elements for Telegram
+    core/
+        __init__.py
+        media_processor.py # Pure logic and data transformations
+    data/
+        __init__.py
+        repository.py # Database and file persistence
+    services/
+        __init__.py
+        external_api.py # External API connections
+    utils/
+        __init__.py
+        logger.py # Shared logging utility
+docs/
+    task.md # Project roadmap
+    tracking.md # Session and git sync tracker
+personal/
+    learning.md # Developer learning ledger
+scripts/
+    architecture_inspector.py # Ported maintenance script
+    git_sync.py # Automated git tool
+tests/
+    __init__.py
+config.py # Central configuration
+main.py # Core entry point
+.env.example # Environment variable template
+requirements.txt # Project dependencies
+run.py # Dev bootstrapper
+run.bat # Quick start
+setup.bat # Environment setup
