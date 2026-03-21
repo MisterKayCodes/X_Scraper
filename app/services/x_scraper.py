@@ -12,7 +12,7 @@ def fetch_x_metadata(url: str):
     api_url = api_url.split('?')[0]
 
     try:
-        response = requests.get(api_url, headers=HEADERS, timeout=20, verify=False)
+        response = requests.get(api_url, headers=HEADERS, timeout=20, verify=True)
         if response.status_code != 200:
             return None, f"Metadata unavailable (Status {response.status_code})"
 

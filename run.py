@@ -35,15 +35,33 @@ if __name__ == "__main__":
     if run_inspector():
         kill_ghosts()
         try:
-            from watchfiles import run_process
-            print("[...] Starting bot with hot-reload...")
-            run_process("./", target=f"{sys.executable} main.py")
+            from watchfiles import run_process, DefaultFilter
+            
+            class IgnoreDataFilter(DefaultFilter):
+                def __call__(self, change, path):
+                    p = str(path).lower()
+                    # Rule: Strictly ignore database files, data folder, and downloads folder
+                    patterns = ["app/data", "app\\data", "downloads", "downloads\\", ".db", ".db-wal", ".db-shm", ".part"]
+                    if any(pattern in p for pattern in patterns):
+                        return False
+                    return super().__call__(change, path)
+
+            print("[...] Starting bot with hot-reload (Ignoring DB/Data)...")
+            run_process("./", target=f"{sys.executable} main.py", watch_filter=IgnoreDataFilter())
         except ImportError:
             print("[...] Installing 'watchfiles' dependency...")
             subprocess.run([sys.executable, "-m", "pip", "install", "watchfiles"])
-            from watchfiles import run_process
-            print("[...] Starting bot with hot-reload...")
-            run_process("./", target=f"{sys.executable} main.py")
+            from watchfiles import run_process, DefaultFilter
+            
+            class IgnoreDataFilter(DefaultFilter):
+                def __call__(self, change, path):
+                    path_str = str(path).replace("\\", "/").lower()
+                    if any(pattern in path_str for pattern in ["app/data", "scraped_media.db", "downloads", ".part"]):
+                        return False
+                    return super().__call__(change, path)
+
+            print("[...] Starting bot with hot-reload (Ignoring DB updates)...")
+            run_process("./", target=f"{sys.executable} main.py", watch_filter=IgnoreDataFilter())
     else:
         print("[!] Fix architectural issues before running.")
         sys.exit(1)

@@ -6,7 +6,7 @@ from app.config import HEADERS, DOWNLOAD_DIR
 from pathlib import Path
 
 def test_speed():
-    url = "https://x.com/MisterKayCodes/status/2034034921983914043"
+    url = "https://x.com/i/status/2035224886310818044"
     print(f"Testing URL: {url}")
     
     start_time = time.time()

@@ -129,3 +129,126 @@ It was **Windows IPv6 DNS Resolution**.
 When `requests` tried to ping `api.vxtwitter.com`, Python's internal socket library on Windows attempted to resolve an IPv6 `AAAA` record. Because the local routing or the ISP doesn't properly support IPv6 handshakes, Python silently **hanged for exactly 15.6 seconds** waiting for a timeout, before finally falling back to IPv4 and connecting instantly.
 
 To fix this natively, I applied a global monkeypatch in `app/config.py` to force `urllib3` to strictly use `socket.AF_INET` (IPv4). The hesitation is gone. The 30-second benchmark has been met and exceeded.
+### 🛰️ UPDATE: THE "AUTOMATED HARVESTER" UPGRADE (2026-03-21)
+
+Lead Debugger, we have successfully evolved the bot from a manual "Cashier" to an autonomous "Harvester." This is now a professional content-factory grade tool.
+
+**1. The Radar (Headless Playwright):**
+We abandoned the "hidden GraphQL" approach because X's anti-bot headers are too aggressive. We now use a Headless Browser (Playwright) that mimics a real human. It navigates to the `/media` tab, scrolls naturally, and extracts raw status links directly from the DOM. This is much harder for X to detect.
+
+**2. The Vault (SQLite Deduplication):**
+We implemented `app/services/db_manager.py`. The bot now tracks every single `tweet_id` it has ever processed. If you scrape the same user twice, the bot will ruthlessly ignore anything it already has in the vault. Zero wasted bandwidth.
+
+**3. The Conveyor (asyncio.Queue + Jitter):**
+Moving 50 videos at once is a death sentence for your IP. We built a background Queue with "Jitter" logic. The bot waits a random 12-27 seconds between every single video. To X and Telegram, it looks like a human is slowly browsing and sharing videos.
+
+**4. The Ghost Courier (Destination Upload):**
+By using `FSInputFile` and sending directly to your `DESTINATION_CHANNEL_ID`, the videos show up in your channel as original uploads. They are NOT marked as "Forwarded." This maintains the premium, organic feel of your channel.
+
+**HOW TO RUN:**
+1. Set `DESTINATION_CHANNEL_ID` in your `.env`.
+2. Run `python run.py`.
+3. In the bot, type: `/scrape @username 20`.
+4. Sit back and watch the channel fill up autonomously.
+
+Stay Hardened. 🦾🤖
+
+### 🏢 UPDATE: THE "MULTI-USER ENGINE" BLUEPRINT (2026-03-21)
+
+Lead Debugger, your audit of the "nothing happens" scenario was correct. The bot was too rigid—it wanted a `-100` ID and rejected anything else without explaining *why* it was rejecting it. We are fixing this by moving to a **User-Centric Architecture**.
+
+**1. Per-User Identity (Isolation):**
+We are refactoring the database. The `settings` table will no longer be global. Every preference (Channel ID, Target User, Jitter speeds) will be tagged with a `user_id`. You can manage 10 different channels for 10 different niches from the same bot.
+
+**2. The HUD (Heads-Up Display):**
+Instead of silent console logs, the bot will now provide "Live Telemetry." 
+*   **Stats:** It will track `posts_scraped`, `posts_deposited`, and `success_rate`.
+*   **Feedback:** As the Conveyor Belt moves, the bot will edit its status message: *"Progress: [████░░░░░░] 4/10 | Deposited: 3 to @ChannelName"*
+
+**3. Interactive Menus (UI/UX):**
+We are moving away from raw text commands. 
+*   **Settings Button:** A persistent menu to verify channel permissions (The "Handshake").
+*   **X Target Memory:** The bot will remember your last @username so you can just type `/harvest` and it knows exactly where to go.
+
+**4. The "New-to-Old" Directive:**
+The harvester is being calibrated to always respect the timeline order. It takes the freshest content first and works its way down.
+
+**The Strategy:** We are making the bot "Self-Aware." It won't just do the work; it will *report* the work to you as a Senior Manager.
+
+Stay Hardened. 🦾🤖
+---
+
+### [CRITICAL CORRECTION LOGGING]
+
+LEAD DEBUGGER:
+While your logic is sound, I have two "Senior" refinements to make your Armor Block even tougher before you deploy it to the VPS.
+1. The "Ghost File" Cleanup (Rule 14): Wrap the removal in a `finally` block so the disk stays clean.
+2. Specific Exception Handling (Rule 12): Look for "Entity Too Large" to give professional feedback.
+
+SENIOR DEV:
+Understood completely, Lead Debugger. Deploying immediately.
+1. Handled: The crash is now *handled*; the bot no longer commits 'silent suicide'. We break the deadlocks.
+2. Clean: The disk state is now *clean* because of the `finally` block, executing like a professional courier. 
+3. Informative: The user experience is now *informative* instead of a dead-end wait.
+
+The Armor Block is live. Standing by for logs.
+196: 
+197: ---
+198: 
+199: ### 🔍 THE "SENIOR" POST-MORTEM (Hardening for Launch)
+200: 
+201: LEAD DEBUGGER:
+202: The code is perfect, but the Environment is a battlefield. We must prepare for "Real-World Friction" before we hit the VPS.
+203: 1. **The Headless Memory Leak:** Playwright will suffocate your VPS RAM if you don't kill the browser properly. We've ensured `finally: await browser.close()` is in everywhere.
+204: 2. **The IP Reputation Wall:** VPS IPs are flagged by X. We must keep the Jitter high and think about Proxies if the wall hits.
+205: 3. **The Telegram Edit Race Condition:** SQLite locks up when multiple users write at once. We've enabled **WAL Mode** (`PRAGMA journal_mode=WAL;`) to allow simultaneous Read/Writes.
+206: 
+207: **Logic:** $Code + Environment = Stability$. 
+208: 
+209: ---
+210: 
+211: ### 🪄 THE "MAGIC LINK" RESOLUTION (User-Centric UX)
+212: 
+213: LEAD DEBUGGER:
+214: You added the "Magic Link" feature! But remember the Senior rule: **Never trust raw User Input.**
+215: 1. **Resolution:** Always turn a "Name" (@username/Link) into an "Address" (-100... ID) before it hits the Vault. Usernames change; IDs are persistent.
+216: 2. **Sanitization:** Clean the link, extract the username, and use `bot.get_chat()` to verify it's a real channel.
+217: 3. **The "Forward" Trick:** The fastest way to get an ID is to have the user **Forward a message**. Telegram gives us the `chat.id` for free. We've implemented this.
+218: 
+219: **The Result:** Zero-Friction onboarding. The user doesn't hunt for IDs; the bot finds them.
+220: 
+221: Stay Hardened. 🦾🤖
+
+---
+
+### 🚨 UPDATE: THE GHOST WALL AUTH BLOCK (2026-03-21)
+
+JUNIOR DEV:
+The network interceptor ran, but it returned 0 targets after 33 seconds. What went wrong? The logs show it never found the JSON.
+
+SENIOR DEV:
+The Interceptor logic was flawless, Junior, but we hit the core of the Ghost Wall: **The Auth Redirect**.
+When Playwright navigates to `https://x.com/username/media` as a completely anonymous guest, X's servers refuse to load the profile entirely. Instead, it silently redirects the headless browser to `https://x.com/i/flow/login`. 
+Because the browser is staring at a login screen, the `UserMedia` GraphQL payload is never actually requested by the frontend!
+
+### The Battle Plan: Cookie Injection
+To pierce this final layer of the Ghost Wall, our Headless Browser must carry a "VIP Badge" (Authentication Cookies).
+1. **The Vault:** We will configure the browser to load a `cookies.json` state file from `app/data/`.
+2. **The Injection:** When initializing the Playwright context, we inject the state: `browser.new_context(storage_state="app/data/cookies.json")`.
+3. **The UX:** We will add a graceful fallback so if the cookies are expired or missing, the bot warns the admin instead of pretending to scrape an empty page.
+
+---
+
+### 🍪 TUTORIAL: HOW TO GET YOUR COOKIES.JSON (BY JUNIOR B FOR JUNIOR A)
+
+Hey Junior A, the CTO just raised the bar. We're using Cookie Injection now. Here is exactly how to get your `cookies.json` file in 10 seconds:
+
+1. **Get the Tool**: Install the "Cookie-Editor" extension on Chrome or Firefox.
+2. **Log In**: Go to `x.com` and log into your burner or main account.
+3. **Export**: Click the Cookie-Editor puzzle piece icon in your top right toolbar.
+4. **The 2 Clicks**: Click **"Export"** at the bottom, then choose **"Export as JSON"**.
+5. **Paste**: This copies a giant array of cookies to your clipboard. Create a new file right here in the project at `app/data/cookies.json` and PASTE that entire text into it.
+
+*My parser script automatically auto-formats the raw array into Playwright's strict `storage_state` wrapper, so you literally just paste and save.*
+
+Stay Hardened. 🦾🤖

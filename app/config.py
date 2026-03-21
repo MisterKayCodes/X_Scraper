@@ -28,3 +28,4 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "REPLACE_ME")
 # Storage
 DOWNLOAD_DIR = "downloads"
 COOKIE_FILE = os.path.join("app", "data", "cookies.txt")
+
