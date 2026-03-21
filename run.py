@@ -19,12 +19,16 @@ def run_inspector():
 def kill_ghosts():
     print("[...] Searching for and terminating ghost processes...")
     try:
+        current_dir = os.getcwd()
         if os.name == 'nt':
-            # Safely target only python processes running main.py utilizing WMI in Powershell
-            cmd = "powershell -Command \"Get-WmiObject Win32_Process -Filter \\\"Name='python.exe'\\\" | Where-Object { $_.CommandLine -ne $null -and $_.CommandLine -match 'main.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }\""
+            # Safely target only python processes running main.py in THIS specific directory
+            cmd = f"powershell -Command \"Get-WmiObject Win32_Process -Filter \\\"Name='python.exe'\\\" | Where-Object {{ $_.CommandLine -ne $null -and $_.CommandLine -match 'main.py' -and $_.CommandLine -match '{current_dir.replace('\\', '\\\\')}' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}\""
             subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         else:
-            cmd = 'pkill -f "python.*main.py"' 
+            # Use absolute path to ensure we ONLY kill this specific bot's ghosts
+            # We escape the current_dir to be safe in pkill regex
+            safe_dir = current_dir.replace("/", "\\/").replace(".", "\\.")
+            cmd = f'pkill -f "python.*{safe_dir}.*main.py"' 
             subprocess.run(cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         print("[OK] Ghost processes cleared.")
     except Exception as e:
