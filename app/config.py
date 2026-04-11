@@ -25,6 +25,10 @@ VX_TWITTER_API = "http://api.vxtwitter.com"
 # Telegram Configuration (To be filled by user)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "REPLACE_ME")
 
+# API Configuration
+API_KEY = os.getenv("API_KEY", "mister_secret_key_2026")
+API_PORT = int(os.getenv("API_PORT", 8001))
+
 # Storage
 DOWNLOAD_DIR = "downloads"
 COOKIE_FILE = os.path.join("app", "data", "cookies.txt")

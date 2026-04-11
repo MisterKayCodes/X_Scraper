@@ -1,21 +1,37 @@
 import asyncio
 import logging
 import sys
+import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from app.config import TELEGRAM_BOT_TOKEN
+
+from app.config import TELEGRAM_BOT_TOKEN, API_PORT
 from app.bot.handlers import router as command_router
 from app.bot.callbacks import router as callback_router
 from app.services.db_manager import init_db
 from app.bot.queue_worker import queue_consumer
+from api import app as fastapi_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+logger = logging.getLogger("mister_launcher")
+
+async def run_bot(bot: Bot, dp: Dispatcher):
+    """Starts the Telegram Bot Polling"""
+    logger.info("[BOT] Starting Aiogram polling...")
+    await dp.start_polling(bot)
+
+async def run_api():
+    """Starts the FastAPI Service"""
+    logger.info(f"[API] Starting FastAPI on port {API_PORT}...")
+    config = uvicorn.Config(fastapi_app, host="0.0.0.0", port=API_PORT, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
 
 async def main():
     if TELEGRAM_BOT_TOKEN == "REPLACE_ME":
-        print("[!] ERROR: Please set your TELEGRAM_BOT_TOKEN in config.py or via environment variables.")
+        logger.error("[!] ERROR: Please set your TELEGRAM_BOT_TOKEN in config.py or via environment variables.")
         return
 
     # Initialize Bot and Dispatcher
@@ -32,16 +48,17 @@ async def main():
     dp.include_router(command_router)
     dp.include_router(callback_router)
 
-    # Start Background Harvester Worker
-    asyncio.create_task(queue_consumer(bot))
-
-    print("[...] Mister Assistant is starting...")
+    # Start ALL layers simultaneously
+    logger.info("🚀 Mister Assistant is launching all systems...")
     
-    # Start Polling
-    await dp.start_polling(bot)
+    await asyncio.gather(
+        queue_consumer(bot), # Background Harvester Worker
+        run_api(),           # FastAPI Service Layer
+        run_bot(bot, dp)     # Telegram Bot Interface
+    )
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("[OK] Stopped.")
+        logger.info("[OK] System Shutdown.")

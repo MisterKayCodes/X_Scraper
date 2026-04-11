@@ -81,13 +81,16 @@ async def queue_consumer(bot: Bot):
                     f"⏱️ **ETA:** ~{int(eta_m)} mins remaining\n"
                     f"───────────────────"
                 )
-                if task['last_msg_id']:
+                # Rule: Only update HUD if it was triggered by a Bot message (msg_id > 0)
+                if task['last_msg_id'] and task['last_msg_id'] > 0:
                     await bot.edit_message_text(
                         text=progress_text, 
                         chat_id=user_id, 
                         message_id=task['last_msg_id'],
                         reply_markup=get_dashboard_keyboard(user_id)
                     )
+                else:
+                    print(f"[CONVEYOR] {task['target_username']} | Progress: {task['success_count']} / {task['total_items']}")
             except Exception as HUD_error:
                 print(f"[!] HUD Sync Warning: {HUD_error}")
             if error:
@@ -170,7 +173,12 @@ async def queue_consumer(bot: Bot):
             updated_task = get_task_by_id(task_id)
             if updated_task and updated_task['processed_count'] >= updated_task['total_items']:
                 set_task_status(task_id, 'COMPLETED')
-                await bot.send_message(user_id, f"🎯 **Task Completed!** @{task['target_username']} harvest finished.")
+                # Rule: Only notify user if user_id is valid (not 0/system)
+                if user_id and user_id > 0:
+                    try:
+                        await bot.send_message(user_id, f"🎯 **Task Completed!** @{task['target_username']} harvest finished.")
+                    except Exception:
+                        pass
             
         except Exception as e:
             print(f"[🚨] Conveyor Loop Failure: {e}")
