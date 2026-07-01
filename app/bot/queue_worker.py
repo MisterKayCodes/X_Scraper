@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from aiogram import Bot, types
 from app.services.x_scraper import fetch_x_metadata
+from app.services.ig_scraper import download_ig_media
 from app.core.media_processor import parse_media_list, sanitize_filename, resolve_extension
 from app.utils.downloader import download_file
 from app.services.db_manager import (
@@ -57,114 +58,149 @@ async def queue_consumer(bot: Bot):
                 harvester_queue.task_done()
                 continue
 
-            # 1. Fetch Metadata
-            data, error = await asyncio.to_thread(fetch_x_metadata, url)
-            caption = data.get("text", "x_media") if data else "x_media"
-            safe_name = sanitize_filename(caption)
-            
-            # 2. Sync HUD with Enterprise Format + Active Download Tracker
-            try:
-                efficiency = (task['success_count'] / max(1, task['processed_count'])) * 100
-                storage_mb = task['storage_kb'] / 1024
-                remaining = task['total_items'] - task['processed_count']
-                eta_m = (remaining * 20) // 60
+            if url.startswith("ig_"):
+                # ==========================
+                # INSTAGRAM PROCESSING LOGIC
+                # ==========================
+                shortcode = url.replace("ig_", "")
                 
-                progress_text = (
-                    f"📊 **Enterprise Stats Card**\n"
-                    f"───────────────────\n"
-                    f"🎯 **Target:** @{task['target_username'].replace('@', '')}\n"
-                    f"⏳ **Status:** DOWNLOADING\n"
-                    f"📥 **File:** `{safe_name[:25]}...`\n\n"
-                    f"📈 **Efficiency:** {efficiency:.1f}%\n"
-                    f"📦 **Posted:** {task['success_count']} / {task['total_items']}\n"
-                    f"💾 **Storage Saved:** {storage_mb:.2f} MB\n"
-                    f"⏱️ **ETA:** ~{int(eta_m)} mins remaining\n"
-                    f"───────────────────"
-                )
-                # Rule: Only update HUD if it was triggered by a Bot message (msg_id > 0)
-                if task['last_msg_id'] and task['last_msg_id'] > 0:
-                    await bot.edit_message_text(
-                        text=progress_text, 
-                        chat_id=user_id, 
-                        message_id=task['last_msg_id'],
-                        reply_markup=get_dashboard_keyboard(user_id)
-                    )
-                else:
-                    print(f"[CONVEYOR] {task['target_username']} | Progress: {task['success_count']} / {task['total_items']}")
-            except Exception as HUD_error:
-                print(f"[!] HUD Sync Warning: {HUD_error}")
-            if error:
-                print(f"[🚨] Conveyor Error for {url}: {error}")
-                log_processed_item(task_id, success=False)
-                continue
+                # Setup specific temp directory for this post to avoid collisions
+                download_path = Path(config.DOWNLOAD_DIR) / shortcode
+                download_path.mkdir(parents=True, exist_ok=True)
                 
-            media_list = parse_media_list(data)
-            
-            if not media_list:
-                print(f"[CONVEYOR] No media found in {url}")
-                log_processed_item(task_id, success=False)
-                continue
-            
-            download_path = Path(config.DOWNLOAD_DIR)
-            download_path.mkdir(exist_ok=True)
-            
-            # Process each media item in the tweet
-            for i, item in enumerate(media_list):
-                m_url = item.get("url")
-                m_type = item.get("type", "image")
-                ext = resolve_extension(m_type, m_url)
+                media_files, caption, error = await download_ig_media(shortcode, download_path)
                 
-                filename = f"{safe_name}_{i}.{ext}" if len(media_list) > 1 else f"{safe_name}.ext"
-                final_path = download_path / filename
+                if error or not media_files:
+                    print(f"[🚨] IG Conveyor Error for {url}: {error}")
+                    log_processed_item(task_id, success=False)
+                    continue
+                    
+                target_channel = get_setting(user_id, "destination_channel_id")
+                if not target_channel:
+                    log_processed_item(task_id, success=False)
+                    print(f"[!] Warning: No destination_channel_id set. Task {task_id} failing.")
+                    continue
+
+                import html
+                media_caption = html.escape(caption)[:1000] # Telegram caption limits
+                total_size_kb = sum(f.stat().st_size for f in media_files) // 1024
                 
-                # Rule: Atomic 128KB Reliable Download - Wrapped in to_thread!
-                download_success = await asyncio.to_thread(
-                    download_file, m_url, final_path, config.HEADERS, quiet=False
-                )
-                if download_success:
-                    # Rule 8: Organic Upload to Destination Channel
-                    target_channel = get_setting(user_id, "destination_channel_id")
-                    if target_channel:
-                        file_input = types.FSInputFile(str(final_path))
-                        import html
-                        media_caption = html.escape(caption)
-                        
-                        try:
-                            file_size_kb = final_path.stat().st_size // 1024
-                            if "video" in m_type:
-                                await bot.send_video(target_channel, video=file_input, caption=media_caption, request_timeout=300)
+                try:
+                    if len(media_files) == 1:
+                        # Single item
+                        f = media_files[0]
+                        file_input = types.FSInputFile(str(f))
+                        if f.suffix.lower() == '.mp4':
+                            await bot.send_video(target_channel, video=file_input, caption=media_caption, request_timeout=300)
+                        else:
+                            await bot.send_photo(target_channel, photo=file_input, caption=media_caption, request_timeout=60)
+                    else:
+                        # Carousel / Media Group
+                        media_group = []
+                        for idx, f in enumerate(media_files[:10]): # Telegram allows max 10 per group
+                            file_input = types.FSInputFile(str(f))
+                            if f.suffix.lower() == '.mp4':
+                                media_group.append(types.InputMediaVideo(media=file_input, caption=media_caption if idx == 0 else ""))
                             else:
-                                await bot.send_photo(target_channel, photo=file_input, caption=media_caption, request_timeout=60)
+                                media_group.append(types.InputMediaPhoto(media=file_input, caption=media_caption if idx == 0 else ""))
+                        
+                        await bot.send_media_group(target_channel, media=media_group, request_timeout=300)
+                        
+                    log_processed_item(task_id, success=True, size_kb=total_size_kb)
+                    print(f"[OK] Organic IG upload triggered for {tweet_id} ({total_size_kb}KB)")
+                except Exception as upload_error:
+                    print(f"[🚨] IG Upload Failure: {upload_error}")
+                    log_processed_item(task_id, success=False)
+                finally:
+                    # Clean up
+                    for f in media_files:
+                        try:
+                            if f.exists(): f.unlink()
+                        except: pass
+                    try:
+                        download_path.rmdir()
+                    except: pass
+            
+            else:
+                # ==========================
+                # X (TWITTER) PROCESSING LOGIC
+                # ==========================
+                data, error = await asyncio.to_thread(fetch_x_metadata, url)
+                caption = data.get("text", "x_media") if data else "x_media"
+                safe_name = sanitize_filename(caption)
+                
+                if error:
+                    print(f"[🚨] Conveyor Error for {url}: {error}")
+                    log_processed_item(task_id, success=False)
+                    continue
+                    
+                media_list = parse_media_list(data)
+                
+                if not media_list:
+                    print(f"[CONVEYOR] No media found in {url}")
+                    log_processed_item(task_id, success=False)
+                    continue
+                
+                download_path = Path(config.DOWNLOAD_DIR)
+                download_path.mkdir(exist_ok=True)
+                
+                # Process each media item in the tweet
+                for i, item in enumerate(media_list):
+                    m_url = item.get("url")
+                    m_type = item.get("type", "image")
+                    ext = resolve_extension(m_type, m_url)
+                    
+                    filename = f"{safe_name}_{i}.{ext}" if len(media_list) > 1 else f"{safe_name}.{ext}"
+                    final_path = download_path / filename
+                    
+                    # Rule: Atomic 128KB Reliable Download - Wrapped in to_thread!
+                    download_success = await asyncio.to_thread(
+                        download_file, m_url, final_path, config.HEADERS, quiet=False
+                    )
+                    if download_success:
+                        # Rule 8: Organic Upload to Destination Channel
+                        target_channel = get_setting(user_id, "destination_channel_id")
+                        if target_channel:
+                            file_input = types.FSInputFile(str(final_path))
+                            import html
+                            media_caption = html.escape(caption)
                             
-                            log_processed_item(task_id, success=True, size_kb=file_size_kb)
-                            print(f"[OK] Organic upload triggered for {tweet_id} ({file_size_kb}KB)")
-                        except Exception as upload_error:
-                            print(f"[🚨] Conveyor Upload Failure with caption: {upload_error}. Retrying without caption...")
                             try:
-                                # Fallback: No caption
-                                file_input = types.FSInputFile(str(final_path)) # Re-init stream just in case
+                                file_size_kb = final_path.stat().st_size // 1024
                                 if "video" in m_type:
-                                    await bot.send_video(target_channel, video=file_input, request_timeout=300)
+                                    await bot.send_video(target_channel, video=file_input, caption=media_caption, request_timeout=300)
                                 else:
-                                    await bot.send_photo(target_channel, photo=file_input, request_timeout=60)
+                                    await bot.send_photo(target_channel, photo=file_input, caption=media_caption, request_timeout=60)
+                                
                                 log_processed_item(task_id, success=True, size_kb=file_size_kb)
-                                print(f"[OK] Fallback upload triggered for {tweet_id} (No Caption)")
-                            except Exception as fallback_error:
-                                log_processed_item(task_id, success=False)
-                                print(f"[🚨] Absolute Upload Failure for {tweet_id}: {fallback_error}")
-                        finally:
-                            try:
-                                if final_path.exists():
-                                    final_path.unlink()
-                            except Exception as e:
-                                print(f"[!] WinError {e} - Skipping cleanup for {final_path.name}")
+                                print(f"[OK] Organic upload triggered for {tweet_id} ({file_size_kb}KB)")
+                            except Exception as upload_error:
+                                print(f"[🚨] Conveyor Upload Failure with caption: {upload_error}. Retrying without caption...")
+                                try:
+                                    # Fallback: No caption
+                                    file_input = types.FSInputFile(str(final_path)) # Re-init stream just in case
+                                    if "video" in m_type:
+                                        await bot.send_video(target_channel, video=file_input, request_timeout=300)
+                                    else:
+                                        await bot.send_photo(target_channel, photo=file_input, request_timeout=60)
+                                    log_processed_item(task_id, success=True, size_kb=file_size_kb)
+                                    print(f"[OK] Fallback upload triggered for {tweet_id} (No Caption)")
+                                except Exception as fallback_error:
+                                    log_processed_item(task_id, success=False)
+                                    print(f"[🚨] Absolute Upload Failure for {tweet_id}: {fallback_error}")
+                            finally:
+                                try:
+                                    if final_path.exists():
+                                        final_path.unlink()
+                                except Exception as e:
+                                    print(f"[!] WinError {e} - Skipping cleanup for {final_path.name}")
+                        else:
+                            log_processed_item(task_id, success=False)
+                            print(f"[!] Warning: No destination_channel_id set. Task {task_id} failing items.")
+                                    
                     else:
                         log_processed_item(task_id, success=False)
-                        print(f"[!] Warning: No destination_channel_id set. Task {task_id} failing items.")
-                                
-                else:
-                    log_processed_item(task_id, success=False)
-                    print(f"[!] Failed to download item for {url}")
+                        print(f"[!] Failed to download item for {url}")
             
             # Mark as processed in the Vault
             mark_as_seen(tweet_id, user_id, task['target_username'])

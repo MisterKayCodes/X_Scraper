@@ -110,7 +110,13 @@ async def state_handler(message: types.Message):
             target = f"@{target}"
         set_setting(message.from_user.id, "default_target", target)
         user_states.pop(message.from_user.id)
-        await message.answer(f"✅ **Default Target Saved!** Scrapes will now default to `{target}`.", reply_markup=get_settings_keyboard())
+        await message.answer(f"✅ **X Target Saved!** X Scraper will default to `{target}`.", reply_markup=get_settings_keyboard())
+
+    elif state == "awaiting_ig_target_user":
+        target = message.text.strip().replace("@", "").replace("https://instagram.com/", "").replace("/", "")
+        set_setting(message.from_user.id, "ig_default_target", target)
+        user_states.pop(message.from_user.id)
+        await message.answer(f"✅ **IG Target Saved!** IG Scraper will default to `@{target}`.", reply_markup=get_settings_keyboard())
 
     elif state == "awaiting_harvest_limit":
         try:

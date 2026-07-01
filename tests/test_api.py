@@ -21,7 +21,9 @@ import json
 import sys
 
 # ── Configuration ──
-BASE_URL = "http://localhost:8001"
+# Toggle: "localhost" for local testing, VPS IP for remote
+# BASE_URL = "http://localhost:8001"
+BASE_URL = "http://67.211.221.40:8001"
 VALID_API_KEY = "TVlfU1VQRVJfU0VDUkVUX0FDQ0VTU19LRVlfMjAyNg=="
 FAKE_API_KEY = "this_is_a_fake_key_lol"
 

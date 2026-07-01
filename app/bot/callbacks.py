@@ -6,6 +6,7 @@ from app.services.db_manager import (
 from app.bot.keyboards import get_settings_keyboard, get_verify_keyboard, get_dashboard_keyboard
 from app.bot.handlers import user_states 
 from app.services.profile_scraper import scrape_profile_media
+from app.services.ig_scraper import scrape_ig_profile_media
 from app.bot.queue_worker import harvester_queue
 
 router = Router()
@@ -28,7 +29,14 @@ async def cb_set_channel(callback: types.CallbackQuery):
 async def cb_set_target(callback: types.CallbackQuery):
     from app.bot.handlers import user_states
     user_states[callback.from_user.id] = "awaiting_target_user"
-    await callback.message.edit_text("🎯 **Type the X Username you want to track by default** (e.g. `@MisterKayCodes`):", reply_markup=get_verify_keyboard())
+    await callback.message.edit_text("🐦 **Type the X (Twitter) Username to track by default** (e.g. `@MisterKayCodes`):", reply_markup=get_verify_keyboard())
+    await callback.answer()
+
+@router.callback_query(F.data == "set_ig_target")
+async def cb_set_ig_target(callback: types.CallbackQuery):
+    from app.bot.handlers import user_states
+    user_states[callback.from_user.id] = "awaiting_ig_target_user"
+    await callback.message.edit_text("📸 **Type the Instagram Username to track by default** (e.g. `@nasa` or just `nasa`):", reply_markup=get_verify_keyboard())
     await callback.answer()
 
 @router.callback_query(F.data == "set_limit")
@@ -58,17 +66,25 @@ async def cb_back(callback: types.CallbackQuery):
     await callback.message.edit_text("🛠️ **Mister Assistant Settings**\nManage your destination and targets below:", reply_markup=get_settings_keyboard())
     await callback.answer()
 
-@router.callback_query(F.data == "setup_harvest")
+@router.callback_query(F.data.in_(["setup_harvest_x", "setup_harvest_ig"]))
 async def cb_setup(callback: types.CallbackQuery):
-    target = get_setting(callback.from_user.id, "default_target")
+    is_ig = (callback.data == "setup_harvest_ig")
+    platform_name = "Instagram" if is_ig else "X (Twitter)"
+    
+    # Use the correct target key for each platform
+    target_key = "ig_default_target" if is_ig else "default_target"
+    target = get_setting(callback.from_user.id, target_key)
     channel = get_setting(callback.from_user.id, "destination_channel_id")
     
-    if not target or not channel:
-        await callback.answer("🚨 Setup Incomplete! Set your Target and Channel first.", show_alert=True)
+    if not target:
+        platform_label = "IG" if is_ig else "X"
+        await callback.answer(f"🚨 No {platform_label} target set! Go to Settings → Set {platform_label} Target first.", show_alert=True)
+        return
+    if not channel:
+        await callback.answer("🚨 No destination channel set! Go to Settings → Set Destination first.", show_alert=True)
         return
         
-    # Trigger Start
-    await callback.answer("🚀 Radar Engaged! Searching for media...", show_alert=True)
+    await callback.answer(f"🚀 Radar Engaged for {platform_name}! Searching for media...", show_alert=True)
     task_id = create_task(callback.from_user.id, target)
     
     async def update_status(text: str):
@@ -82,7 +98,10 @@ async def cb_setup(callback: types.CallbackQuery):
     scrape_limit = int(limit_str) if limit_str else 20
             
     # 1. Scrape
-    links = await scrape_profile_media(target, callback.from_user.id, limit=scrape_limit, status_callback=update_status)
+    if is_ig:
+        links = await scrape_ig_profile_media(target, callback.from_user.id, limit=scrape_limit, status_callback=update_status)
+    else:
+        links = await scrape_profile_media(target, callback.from_user.id, limit=scrape_limit, status_callback=update_status)
     
     if not links:
         set_task_status(task_id, 'STOPPED')

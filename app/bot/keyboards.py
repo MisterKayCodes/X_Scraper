@@ -13,7 +13,8 @@ def get_dashboard_keyboard(user_id: int):
     buttons = []
     
     if not task:
-        buttons.append([InlineKeyboardButton(text="🚀 Start New Harvest", callback_data="setup_harvest")])
+        buttons.append([InlineKeyboardButton(text="🚀 Start X Harvest", callback_data="setup_harvest_x")])
+        buttons.append([InlineKeyboardButton(text="📸 Start IG Harvest", callback_data="setup_harvest_ig")])
     else:
         # State-Based Controls
         status = task.get('status', 'IDLE')
@@ -38,11 +39,14 @@ def get_settings_keyboard(user_id: int = 0, context: str = "settings"):
     buttons = [
         [
             InlineKeyboardButton(text="📡 Set Destination", callback_data="set_channel"),
-            InlineKeyboardButton(text="🎯 Set Default Target", callback_data="set_target")
+            InlineKeyboardButton(text="✅ Verify Channel Access", callback_data="verify_channel")
         ],
         [
-            InlineKeyboardButton(text="🔢 Set Harvest Limit", callback_data="set_limit"),
-            InlineKeyboardButton(text="✅ Verify Channel Access", callback_data="verify_channel")
+            InlineKeyboardButton(text="🐦 Set X Target", callback_data="set_target"),
+            InlineKeyboardButton(text="📸 Set IG Target", callback_data="set_ig_target")
+        ],
+        [
+            InlineKeyboardButton(text="🔢 Set Harvest Limit", callback_data="set_limit")
         ]
     ]
     
