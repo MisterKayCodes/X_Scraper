@@ -1,8 +1,11 @@
 from aiogram import Router, types, F
 from aiogram.filters import Command, CommandObject
 
-from app.services.db_manager import (
+from app.data.db_manager import (
     set_setting, get_setting, create_task, update_task_meta, get_user_aggregated_stats
+)
+from app.data.db_advanced import (
+    add_source_channel, add_telegram_channel, create_auto_check, stop_auto_check, get_source_channel_by_id
 )
 from app.bot.keyboards import (
     get_settings_keyboard, get_verify_keyboard, 
@@ -58,6 +61,16 @@ async def stats_handler(message: types.Message):
     )
     
     await message.answer(stats_text)
+
+@router.message(Command("addsource"))
+async def addsource_handler(message: types.Message):
+    user_states[message.from_user.id] = "awaiting_new_source"
+    await message.answer("📺 Send me the URL of the YouTube channel, X profile, or IG profile you want to add.")
+
+@router.message(Command("autocheck"))
+async def autocheck_handler(message: types.Message):
+    user_states[message.from_user.id] = "awaiting_autocheck_setup"
+    await message.answer("⚙️ Send me the setup in this format: `source_id | target_channel_id | interval_minutes`\nExample: `1 | -100123456 | 60`\nOr send `stop | source_id` to stop auto-checking for a source.")
 
 @router.message(Command("settings"))
 async def settings_handler(message: types.Message):
@@ -129,3 +142,60 @@ async def state_handler(message: types.Message):
         except ValueError:
             await message.answer("❌ Invalid input. Please enter a valid number between 1 and 500.")
 
+    elif state == "awaiting_new_source":
+        url = message.text.strip()
+        platform = "unknown"
+        if "youtube.com" in url or "youtu.be" in url:
+            platform = "youtube"
+        elif "twitter.com" in url or "x.com" in url:
+            platform = "twitter"
+        elif "instagram.com" in url:
+            platform = "instagram"
+            
+        import asyncio
+        loop = asyncio.get_event_loop()
+        source_id = loop.run_until_complete(add_source_channel(
+            user_id=message.from_user.id,
+            platform=platform,
+            channel_url=url,
+            channel_name=url.split('/')[-1],
+            collection_name=f"{platform}_auto"
+        ))
+        user_states.pop(message.from_user.id)
+        if source_id:
+            await message.answer(f"✅ Added {platform} source! ID: {source_id}")
+        else:
+            await message.answer("❌ Failed to add source (might already exist).")
+
+    elif state == "awaiting_autocheck_setup":
+        data = message.text.strip().split('|')
+        import asyncio
+        loop = asyncio.get_event_loop()
+        
+        if len(data) == 2 and data[0].strip().lower() == 'stop':
+            source_id = int(data[1].strip())
+            loop.run_until_complete(stop_auto_check(source_id))
+            await message.answer(f"🛑 Stopped auto-check for source ID {source_id}.")
+        elif len(data) == 3:
+            try:
+                source_id = int(data[0].strip())
+                target_id = data[1].strip()
+                interval = int(data[2].strip())
+                
+                # Make sure the target channel is added to db
+                tg_id = loop.run_until_complete(add_telegram_channel(message.from_user.id, target_id))
+                
+                # Create the check
+                auto_id = loop.run_until_complete(create_auto_check(
+                    user_id=message.from_user.id,
+                    source_channel_id=source_id,
+                    telegram_channel_id=tg_id,
+                    interval_minutes=interval
+                ))
+                await message.answer(f"✅ Auto-check scheduled every {interval} mins for Source {source_id} -> Target {target_id}")
+            except Exception as e:
+                await message.answer(f"❌ Error setting up auto-check: {e}")
+        else:
+            await message.answer("❌ Invalid format. Use: `source_id | target_channel_id | interval_minutes`")
+        
+        user_states.pop(message.from_user.id)

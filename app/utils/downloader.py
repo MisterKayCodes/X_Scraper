@@ -2,6 +2,9 @@ import requests
 from pathlib import Path
 from tqdm import tqdm
 import sys
+import yt_dlp
+import os
+import asyncio
 
 def log(msg, level="INFO", quiet=False):
     if not quiet:
@@ -52,3 +55,92 @@ def download_file(url: str, dest_path: Path, headers: dict, quiet=False):
         print(f"[🚨] Critical Download Failure: {e}")
         log(f"Download failed for {url}: {e}", "ERROR", quiet=quiet)
         return False
+
+async def check_file_size(content_url: str, max_size_mb: int = 50) -> dict:
+    """Pre-flight check to get video size and ensure it's under max_size_mb."""
+    max_bytes = max_size_mb * 1024 * 1024
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'skip_download': True,
+    }
+    
+    def check():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            try:
+                info = ydl.extract_info(content_url, download=False)
+                if not info:
+                    return {'error': 'Could not get video info', 'exceeds_limit': False}
+                
+                filesize = info.get('filesize') or info.get('filesize_approx')
+                
+                if not filesize:
+                    formats = info.get('formats', [])
+                    for fmt in formats:
+                        if fmt.get('ext') == 'mp4':
+                            fs = fmt.get('filesize') or fmt.get('filesize_approx')
+                            if fs:
+                                filesize = fs
+                                break
+                
+                exceeds_limit = False
+                if filesize is not None:
+                    exceeds_limit = filesize > max_bytes
+                
+                return {
+                    'filesize': filesize,
+                    'filesize_mb': round(filesize / (1024 * 1024), 2) if filesize else None,
+                    'exceeds_limit': exceeds_limit,
+                    'size_unknown': filesize is None,
+                    'title': info.get('title', '')
+                }
+            except Exception as e:
+                return {'error': str(e), 'exceeds_limit': False}
+    
+    return await asyncio.get_event_loop().run_in_executor(None, check)
+
+async def download_with_ytdlp(url: str, download_dir: Path, check_size_first: bool = True) -> dict:
+    """
+    Downloads and remuxes video using yt-dlp to ensure Telegram thumbnails work.
+    """
+    if check_size_first:
+        size_info = await check_file_size(url)
+        if size_info and size_info.get('exceeds_limit'):
+            return {
+                'success': False, 
+                'error': f"File size ({size_info.get('filesize_mb', '?')}MB) exceeds 50MB limit."
+            }
+            
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'format': 'best[ext=mp4][filesize<50M]/best[ext=mp4]/best',
+        'outtmpl': str(download_dir / '%(id)s.%(ext)s'),
+        'merge_output_format': 'mp4',
+    }
+    
+    def download():
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            try:
+                info = ydl.extract_info(url, download=True)
+                if info:
+                    video_id = info.get('id')
+                    ext = info.get('ext', 'mp4')
+                    file_path = download_dir / f"{video_id}.{ext}"
+                    
+                    if file_path.exists():
+                        file_size = file_path.stat().st_size
+                        if file_size > 50 * 1024 * 1024:
+                            file_path.unlink()
+                            return {'success': False, 'error': f"Downloaded file ({round(file_size/(1024*1024), 2)}MB) exceeds limit."}
+                        return {
+                            'success': True,
+                            'file_path': file_path,
+                            'title': info.get('title', ''),
+                            'filesize_mb': round(file_size / (1024 * 1024), 2)
+                        }
+                return {'success': False, 'error': 'Unknown download failure.'}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
+    
+    return await asyncio.get_event_loop().run_in_executor(None, download)

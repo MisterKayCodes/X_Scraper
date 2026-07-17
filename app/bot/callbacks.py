@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from app.services.db_manager import (
+from app.data.db_manager import (
     get_setting, create_task, get_active_task, 
     set_task_status, get_task_by_id
 )
@@ -110,7 +110,7 @@ async def cb_setup(callback: types.CallbackQuery):
         
     # 2. Update Task & Queue
     await callback.message.edit_text(f"📡 **Harvester Loaded:** {len(links)} items found. Starting Conveyor...")
-    from app.services.db_manager import update_task_meta
+    from app.data.db_manager import update_task_meta
     update_task_meta(task_id, len(links), callback.message.message_id)
     
     for link in links:

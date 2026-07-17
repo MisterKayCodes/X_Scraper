@@ -1,0 +1,1 @@
+raise ImportError("This file has been moved to app.data.db_advanced according to architecture rules.")

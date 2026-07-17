@@ -3,7 +3,7 @@ import instaloader
 import glob
 import os
 from pathlib import Path
-from app.services.db_manager import is_duplicate
+from app.data.db_manager import is_duplicate
 
 def get_instaloader():
     """Initializes Instaloader and attempts to load an existing session cookie file."""
@@ -13,7 +13,9 @@ def get_instaloader():
         download_comments=False,
         save_metadata=False,
         compress_json=False,
-        post_metadata_txt_pattern=""
+        post_metadata_txt_pattern="",
+        max_connection_attempts=1,  # CRITICAL: Fail fast. Do NOT wait 30 mins on 429!
+        quiet=True                  # Suppress instaloader's own retry logs
     )
     # Search for any ig_session file in the root folder
     sessions = glob.glob("ig_session_*")

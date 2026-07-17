@@ -7,7 +7,7 @@ from app.services.x_scraper import fetch_x_metadata
 from app.services.ig_scraper import download_ig_media
 from app.core.media_processor import parse_media_list, sanitize_filename, resolve_extension
 from app.utils.downloader import download_file
-from app.services.db_manager import (
+from app.data.db_manager import (
     get_setting, mark_as_seen, 
     get_task_by_id, log_processed_item, set_task_status
 )
@@ -34,9 +34,14 @@ async def queue_consumer(bot: Bot):
         url, user_id, task_id = item
         tweet_id = url.split("/")[-1]
         
-        # Rule: Jitter (12 - 27 seconds) to mimic human behavior
-        wait_time = random.uniform(12.0, 27.0)
+        # Rule: Jitter (60 - 120 seconds) to mimic human behavior and avoid bans
+        wait_time = random.uniform(60.0, 120.0)
         print(f"[CONVEYOR] User {user_id} | Processing {url}. Sleeping for {wait_time:.2f}s jitter...")
+        try:
+            if user_id and user_id > 0:
+                await bot.send_message(user_id, f"⏳ Throttling: Waiting {wait_time:.0f}s before processing next item...")
+        except:
+            pass
         await asyncio.sleep(wait_time)
         
         try:
@@ -57,6 +62,24 @@ async def queue_consumer(bot: Bot):
                 print(f"[🛑] Task {task_id} was STOPPED. Skipping item.")
                 harvester_queue.task_done()
                 continue
+                
+            # Pre-flight Admin Check
+            target_channel = get_setting(user_id, "destination_channel_id")
+            if target_channel:
+                try:
+                    chat_member = await bot.get_chat_member(target_channel, bot.id)
+                    if chat_member.status not in ["administrator", "creator"]:
+                        if user_id and user_id > 0:
+                            await bot.send_message(user_id, f"🚨 **Pre-flight Error**: I am not an admin in the target channel `{target_channel}`! Please promote me.")
+                        log_processed_item(task_id, success=False)
+                        harvester_queue.task_done()
+                        continue
+                except Exception as e:
+                    if user_id and user_id > 0:
+                        await bot.send_message(user_id, f"🚨 **Pre-flight Error**: Could not verify admin status in `{target_channel}`. Error: {e}")
+                    log_processed_item(task_id, success=False)
+                    harvester_queue.task_done()
+                    continue
 
             if url.startswith("ig_"):
                 # ==========================

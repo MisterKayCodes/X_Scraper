@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram import Router, types, F
-from app.services.db_manager import (
+from app.data.db_manager import (
     get_setting, create_task, get_active_task, 
     set_task_status, get_task_by_id
 )

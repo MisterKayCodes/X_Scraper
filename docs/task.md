@@ -17,4 +17,12 @@
     - [x] Integrate uvicorn server into main.py
     - [x] Use asyncio.gather to run Bot, API, and Worker together
     - [x] Move task/tracking docs to root folder
-- [/] Phase 6: Multi-API Deployment Guide
+- [x] Phase 6: Multi-API Deployment Guide
+- [x] Phase 7: Multi-Channel & YouTube Integration
+    - [x] Update database for multi-channel & auto-checks
+    - [x] Migrate `downloader.py` to `yt-dlp` for remuxing
+    - [x] Create YouTube scraper and auto-check scheduler
+    - [x] Add Bot UI commands for sources and intervals
+- [x] Phase 8: Architectural Adherence
+    - [x] Move all DB modules from `app/services` to `app/data`
+    - [x] Fix cross-file imports to prevent Mutant violations

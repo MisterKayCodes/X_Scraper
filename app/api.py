@@ -6,8 +6,12 @@ import logging
 
 from app.config import API_KEY
 from app.services.profile_scraper import scrape_profile_media
-from app.services.db_manager import set_setting, create_task, update_task_meta
+from app.data.db_manager import set_setting, create_task, update_task_meta
 from app.bot.queue_worker import harvester_queue
+from fastapi.responses import FileResponse
+from app.utils.downloader import download_with_ytdlp
+from pathlib import Path
+import os
 
 app = FastAPI(title="X Scraper API", version="1.0.0")
 logger = logging.getLogger("uvicorn.error")
@@ -24,6 +28,9 @@ class ScrapeRequest(BaseModel):
     limit: Optional[int] = 20
     destination_id: str  # Telegram Channel/Chat ID
     user_id: Optional[int] = 0  # Default system user
+
+class SingleDownloadRequest(BaseModel):
+    url: str
 
 # --- Handlers ---
 async def run_scrape_process(username: str, limit: int, destination_id: str, user_id: int):
@@ -42,7 +49,7 @@ async def run_scrape_process(username: str, limit: int, destination_id: str, use
         links = await scrape_profile_media(username, user_id, limit)
         
         if not links:
-            from app.services.db_task_layer import set_task_status
+            from app.data.db_task_layer import set_task_status
             set_task_status(task_id, 'STOPPED')
             logger.warning(f"[API] No links found for @{username}")
             return
@@ -80,3 +87,18 @@ async def trigger_scrape(request: ScrapeRequest, background_tasks: BackgroundTas
         "target": request.username,
         "destination": request.destination_id
     }
+
+@app.post("/download")
+async def download_single_link(request: SingleDownloadRequest, _ = Depends(verify_api_key)):
+    """
+    Downloads a single YouTube or X link and returns the media directly.
+    """
+    temp_dir = Path("app/downloads")
+    temp_dir.mkdir(exist_ok=True)
+    
+    result = await download_with_ytdlp(request.url, temp_dir, check_size_first=False)
+    if not result.get('success'):
+        raise HTTPException(status_code=400, detail=result.get('error', 'Download failed'))
+        
+    file_path = result['file_path']
+    return FileResponse(path=file_path, filename=file_path.name, media_type='application/octet-stream')

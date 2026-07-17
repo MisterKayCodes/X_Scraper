@@ -9,9 +9,10 @@ from aiogram.client.default import DefaultBotProperties
 from app.config import TELEGRAM_BOT_TOKEN, API_PORT
 from app.bot.handlers import router as command_router
 from app.bot.callbacks import router as callback_router
-from app.services.db_manager import init_db
+from app.data.db_manager import init_db
 from app.bot.queue_worker import queue_consumer
-from api import app as fastapi_app
+from app.services.scheduler import run_auto_check_loop
+from app.api import app as fastapi_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -53,6 +54,7 @@ async def main():
     
     await asyncio.gather(
         queue_consumer(bot), # Background Harvester Worker
+        run_auto_check_loop(), # Background Scheduler for Auto-Checking
         run_api(),           # FastAPI Service Layer
         run_bot(bot, dp)     # Telegram Bot Interface
     )

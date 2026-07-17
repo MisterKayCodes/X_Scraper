@@ -5,7 +5,7 @@ from app.core.media_processor import parse_media_list, sanitize_filename, resolv
 from app.utils.downloader import download_file
 from app.services.profile_scraper import scrape_profile_media
 from app.bot.queue_worker import harvester_queue
-from app.services.db_manager import create_task, update_task_meta
+from app.data.db_manager import create_task, update_task_meta
 from app.bot.keyboards import get_dashboard_keyboard
 from app.config import HEADERS, DOWNLOAD_DIR
 from pathlib import Path
@@ -112,7 +112,7 @@ async def scrape_handler(message: types.Message, command: CommandObject):
     links = await scrape_profile_media(username, message.from_user.id, limit, status_callback=update_status)
     
     if not links:
-        from app.services.db_manager import set_task_status
+        from app.data.db_manager import set_task_status
         set_task_status(task_id, 'STOPPED')
         await status_msg.edit_text(f"❌ **Radar Failure:** No new media found for {username}.")
         return

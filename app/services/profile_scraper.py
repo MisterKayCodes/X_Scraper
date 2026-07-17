@@ -2,7 +2,7 @@ import asyncio
 import random
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth
-from app.services.db_manager import is_duplicate
+from app.data.db_manager import is_duplicate
 
 from typing import Callable, Awaitable
 
