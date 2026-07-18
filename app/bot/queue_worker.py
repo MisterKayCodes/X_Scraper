@@ -144,6 +144,75 @@ async def queue_consumer(bot: Bot):
                         download_path.rmdir()
                     except: pass
             
+            elif "youtube.com" in url or "youtu.be" in url:
+                # ==========================
+                # YOUTUBE PROCESSING LOGIC
+                # ==========================
+                from app.utils.downloader import download_with_ytdlp
+
+                target_channel = get_setting(user_id, "destination_channel_id")
+                if not target_channel:
+                    log_processed_item(task_id, success=False)
+                    print(f"[!] Warning: No destination_channel_id set. Task {task_id} failing.")
+                    harvester_queue.task_done()
+                    continue
+
+                download_path = Path(config.DOWNLOAD_DIR)
+                download_path.mkdir(exist_ok=True)
+
+                if user_id and user_id > 0:
+                    try:
+                        await bot.send_message(user_id, f"📥 Downloading YouTube video...\n`{url}`")
+                    except:
+                        pass
+
+                result = await download_with_ytdlp(url, download_path, check_size_first=True)
+
+                if not result.get("success"):
+                    err = result.get("error", "Unknown error")
+                    print(f"[🚨] YouTube download failed for {url}: {err}")
+                    log_processed_item(task_id, success=False)
+                    if user_id and user_id > 0:
+                        try:
+                            await bot.send_message(user_id, f"❌ **YouTube Download Failed:** {err}")
+                        except:
+                            pass
+                    harvester_queue.task_done()
+                    continue
+
+                file_path = result["file_path"]
+                title = result.get("title", "YouTube Video")
+                size_kb = int(result.get("filesize_mb", 0) * 1024)
+
+                import html as _html
+                media_caption = _html.escape(title)[:1024]
+
+                try:
+                    file_input = types.FSInputFile(str(file_path))
+                    await bot.send_video(
+                        target_channel,
+                        video=file_input,
+                        caption=media_caption,
+                        supports_streaming=True,
+                        request_timeout=300
+                    )
+                    log_processed_item(task_id, success=True, size_kb=size_kb)
+                    print(f"[OK] YouTube upload complete for {url} ({size_kb}KB)")
+                except Exception as upload_error:
+                    print(f"[🚨] YouTube Upload Failure: {upload_error}")
+                    log_processed_item(task_id, success=False)
+                    if user_id and user_id > 0:
+                        try:
+                            await bot.send_message(user_id, f"❌ **YouTube Upload Failed:** {upload_error}")
+                        except:
+                            pass
+                finally:
+                    try:
+                        if file_path.exists():
+                            file_path.unlink()
+                    except Exception as e:
+                        print(f"[!] YouTube cleanup error: {e}")
+
             else:
                 # ==========================
                 # X (TWITTER) PROCESSING LOGIC
