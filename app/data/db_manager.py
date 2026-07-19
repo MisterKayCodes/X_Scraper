@@ -207,9 +207,10 @@ def mark_as_seen(tweet_id: str, user_id: int, username: str):
         conn.close()
 
 def set_task_next_post_time(task_id: int, next_time: int):
-    with get_db_connection() as conn:
-        conn.execute("UPDATE tasks SET next_post_time = ? WHERE task_id = ?", (next_time, task_id))
-        conn.commit()
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE tasks SET next_post_time = ? WHERE task_id = ?", (next_time, task_id))
+    conn.commit()
+    conn.close()
 
 def set_setting(user_id: int, key: str, value: str):
     """
