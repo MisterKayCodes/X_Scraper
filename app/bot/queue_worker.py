@@ -265,7 +265,24 @@ async def queue_consumer(bot: Bot):
                 download_path.mkdir(exist_ok=True)
                 
                 # Process each media item in the tweet
-                for i, item in enumerate(media_list):
+                media_filter = task.get('media_filter', 'any')
+                
+                # Filter media list based on user preference
+                filtered_media = []
+                for item in media_list:
+                    m_type = item.get("type", "image")
+                    if media_filter == "video" and "video" not in m_type:
+                        continue
+                    if media_filter == "photo" and "video" in m_type:
+                        continue
+                    filtered_media.append(item)
+                    
+                if not filtered_media:
+                    print(f"[CONVEYOR] Filter '{media_filter}' excluded all media in {url}")
+                    log_processed_item(task_id, success=False)
+                    continue
+
+                for i, item in enumerate(filtered_media):
                     m_url = item.get("url")
                     m_type = item.get("type", "image")
                     ext = resolve_extension(m_type, m_url)
@@ -288,9 +305,9 @@ async def queue_consumer(bot: Bot):
                             try:
                                 file_size_kb = final_path.stat().st_size // 1024
                                 if "video" in m_type:
-                                    await bot.send_video(target_channel, video=file_input, caption=media_caption, request_timeout=300)
+                                    await bot.send_video(target_channel, video=file_input, caption=media_caption, request_timeout=300, parse_mode="HTML")
                                 else:
-                                    await bot.send_photo(target_channel, photo=file_input, caption=media_caption, request_timeout=60)
+                                    await bot.send_photo(target_channel, photo=file_input, caption=media_caption, request_timeout=60, parse_mode="HTML")
                                 
                                 log_processed_item(task_id, success=True, size_kb=file_size_kb)
                                 print(f"[OK] Organic upload triggered for {tweet_id} ({file_size_kb}KB)")

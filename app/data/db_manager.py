@@ -44,13 +44,18 @@ def init_db():
             storage_kb INTEGER DEFAULT 0,
             last_msg_id INTEGER,
             next_post_time INTEGER DEFAULT 0,
+            media_filter TEXT DEFAULT 'any',
             start_time DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
-    # Try adding the column if table already exists
+    # Try adding the columns if table already exists
     try:
         conn.execute("ALTER TABLE tasks ADD COLUMN next_post_time INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE tasks ADD COLUMN media_filter TEXT DEFAULT 'any'")
     except sqlite3.OperationalError:
         pass
 

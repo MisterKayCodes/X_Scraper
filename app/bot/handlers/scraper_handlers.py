@@ -128,7 +128,7 @@ async def scrape_handler(message: types.Message, command: CommandObject):
     await execute_scrape_internal(message, message.from_user.id, username, "twitter", limit)
 
 
-async def execute_scrape_internal(message: types.Message, user_id: int, username: str, platform: str, override_limit: int = None, mode: str = "media"):
+async def execute_scrape_internal(message: types.Message, user_id: int, username: str, platform: str, override_limit: int = None, mode: str = "media", media_filter: str = "any"):
     from app.data.db_manager import get_setting
     from app.services.ig_scraper import scrape_ig_profile_media
     
@@ -136,11 +136,12 @@ async def execute_scrape_internal(message: types.Message, user_id: int, username
     limit = override_limit or (int(limit_str) if limit_str else 20)
     
     mode_label = "Full Timeline" if mode == "timeline" else "Media Tab"
-    status_msg = await message.answer(f"🔍 **Radar Engaged [{mode_label}]:** Harvesting last {limit} media from `{username}` ({platform})...")
+    filter_label = "Any Media" if media_filter == "any" else ("Videos Only" if media_filter == "video" else "Photos Only")
+    status_msg = await message.answer(f"🔍 **Radar Engaged [{mode_label} | {filter_label}]:** Harvesting last {limit} media from `{username}` ({platform})...")
 
     
     # 1. Spawn Task
-    task_id = create_task(user_id, username)
+    task_id = create_task(user_id, username, media_filter=media_filter)
     
     # 2. Scrape links using Headless Radar
     async def update_status(text: str):

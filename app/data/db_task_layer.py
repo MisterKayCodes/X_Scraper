@@ -2,15 +2,15 @@ import sqlite3
 from typing import Optional, Dict
 from app.data.db_manager import db_path
 
-def create_task(user_id: int, target_username: str) -> int:
+def create_task(user_id: int, target_username: str, media_filter: str = 'any') -> int:
     """
     Spawns a new harvest task in the database. Returns task_id.
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO tasks (user_id, target_username, status) VALUES (?, ?, 'SCRAPING')",
-        (user_id, target_username)
+        "INSERT INTO tasks (user_id, target_username, status, media_filter) VALUES (?, ?, 'SCRAPING', ?)",
+        (user_id, target_username, media_filter)
     )
     task_id = cursor.lastrowid
     conn.commit()
