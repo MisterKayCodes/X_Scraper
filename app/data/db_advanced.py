@@ -218,6 +218,26 @@ def _stop_auto_check(source_channel_id: int):
     conn.commit()
     conn.close()
 
+def _get_all_auto_checks(user_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT ac.*, sc.platform, sc.channel_url
+        FROM auto_check ac
+        JOIN source_channels sc ON ac.source_channel_id = sc.id
+        WHERE ac.user_id = ?
+    ''', (user_id,))
+    checks = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return checks
+
+def _delete_auto_check(auto_check_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM auto_check WHERE id = ?', (auto_check_id,))
+    conn.commit()
+    conn.close()
+
 # Async wrappers
 async def add_source_channel(*args, **kwargs): return await run_sync(_add_source_channel, *args, **kwargs)
 async def get_user_source_channels(*args, **kwargs): return await run_sync(_get_user_source_channels, *args, **kwargs)
@@ -234,3 +254,5 @@ async def get_active_auto_checks(*args, **kwargs): return await run_sync(_get_ac
 async def update_auto_check(*args, **kwargs): return await run_sync(_update_auto_check, *args, **kwargs)
 async def get_user_auto_checks(*args, **kwargs): return await run_sync(_get_user_auto_checks, *args, **kwargs)
 async def stop_auto_check(*args, **kwargs): return await run_sync(_stop_auto_check, *args, **kwargs)
+async def get_all_auto_checks(*args, **kwargs): return await run_sync(_get_all_auto_checks, *args, **kwargs)
+async def delete_auto_check(*args, **kwargs): return await run_sync(_delete_auto_check, *args, **kwargs)

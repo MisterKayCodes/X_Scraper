@@ -11,7 +11,7 @@ router = Router(name="menu")
 
 MENU_BUTTONS = [
     "🐦 X Harvest", "📸 IG Harvest", "▶️ YT Harvest",
-    "📊 Stats", "📺 Add Source", "⏰ Auto-Check",
+    "📊 Stats", "📺 Add Source", "🤖 Auto-Harvest",
     "⚙️ Settings", "🔍 Verify Channel", "📝 Logs"
 ]
 
@@ -45,7 +45,7 @@ async def menu_interceptor(message: types.Message, state: FSMContext):
         await btn_stats(message)
     elif message.text == "📺 Add Source":
         await btn_addsource(message, state)
-    elif message.text == "⏰ Auto-Check":
+    elif message.text == "🤖 Auto-Harvest":
         await btn_autocheck(message, state)
     elif message.text == "⚙️ Settings":
         await btn_settings(message)

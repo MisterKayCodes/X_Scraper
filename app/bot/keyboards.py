@@ -12,7 +12,7 @@ def get_main_reply_keyboard():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🐦 X Harvest"), KeyboardButton(text="📸 IG Harvest"), KeyboardButton(text="▶️ YT Harvest")],
-            [KeyboardButton(text="📊 Stats"), KeyboardButton(text="📺 Add Source"), KeyboardButton(text="⏰ Auto-Check")],
+            [KeyboardButton(text="📊 Stats"), KeyboardButton(text="📺 Add Source"), KeyboardButton(text="🤖 Auto-Harvest")],
             [KeyboardButton(text="⚙️ Settings"), KeyboardButton(text="🔍 Verify Channel")],
             [KeyboardButton(text="📝 Logs")]
         ],
@@ -40,6 +40,7 @@ def get_dashboard_keyboard(user_id: int):
             buttons.append([InlineKeyboardButton(text="⏸️ Pause Harvester", callback_data=f"pause_task:{task['task_id']}")])
             
         buttons.append([InlineKeyboardButton(text="🛑 Force Stop", callback_data=f"stop_task:{task['task_id']}")])
+        buttons.append([InlineKeyboardButton(text="🔄 Enable Auto-Check", callback_data=f"setup_autocheck:{task['task_id']}")])
         buttons.append([InlineKeyboardButton(text="📊 Refresh Stats", callback_data=f"refresh_stats:{task['task_id']}")])
         
     buttons.append([InlineKeyboardButton(text="⚙️ Settings", callback_data="back_to_settings")])
