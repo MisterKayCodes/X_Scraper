@@ -16,6 +16,9 @@ def fetch_x_metadata(url: str):
         if response.status_code != 200:
             return None, f"Metadata unavailable (Status {response.status_code})"
 
-        return response.json(), None
+        try:
+            return response.json(), None
+        except ValueError: # JSONDecodeError inherits from ValueError
+            return None, "Invalid metadata format (API returned blank/HTML)"
     except Exception as e:
         return None, str(e)

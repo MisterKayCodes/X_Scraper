@@ -9,7 +9,8 @@ from app.core.media_processor import parse_media_list, sanitize_filename, resolv
 from app.utils.downloader import download_file
 from app.data.db_manager import (
     get_setting, mark_as_seen, 
-    get_task_by_id, log_processed_item, set_task_status
+    get_task_by_id, log_processed_item, set_task_status,
+    set_task_next_post_time
 )
 from app.bot.keyboards import get_dashboard_keyboard
 from app import config
@@ -34,21 +35,46 @@ async def queue_consumer(bot: Bot):
         url, user_id, task_id = item
         tweet_id = url.split("/")[-1]
         
-        # Rule: Jitter (60 - 120 seconds) to mimic human behavior and avoid bans
-        wait_time = random.uniform(60.0, 120.0)
+        # 1. Fetch Task Context early for smart jitter
+        task = get_task_by_id(task_id)
+        if not task:
+            harvester_queue.task_done()
+            continue
+
+        # Rule: First post is immediate (1-5s), rest use Jitter (60-120s)
+        if task.get('processed_count', 0) == 0:
+            wait_time = random.uniform(1.0, 5.0)
+        else:
+            wait_time = random.uniform(60.0, 120.0)
+            
         print(f"[CONVEYOR] User {user_id} | Processing {url}. Sleeping for {wait_time:.2f}s jitter...")
-        try:
-            if user_id and user_id > 0:
-                await bot.send_message(user_id, f"⏳ Throttling: Waiting {wait_time:.0f}s before processing next item...")
-        except:
-            pass
+        
+        # Save wake up time to DB
+        set_task_next_post_time(task_id, int(time.time() + wait_time))
+        
+        # Live Update the Dashboard
+        if user_id and user_id > 0 and task.get('last_msg_id'):
+            remaining = task['total_items'] - task['processed_count']
+            eta_mins = round((remaining * 90) / 60) # Approx 90s per item average
+            dash_text = (
+                f"🎯 **Harvester Dashboard — `@{task['target_username']}`**\n\n"
+                f"📦 Progress: **{task['processed_count']} / {task['total_items']}** posted\n"
+                f"⏱️ Next post in: **~{int(wait_time)} seconds**\n"
+                f"⏳ Est. Time Remaining: **~{eta_mins} mins**"
+            )
+            try:
+                await bot.edit_message_text(
+                    text=dash_text,
+                    chat_id=user_id,
+                    message_id=task['last_msg_id'],
+                    reply_markup=get_dashboard_keyboard(user_id)
+                )
+            except Exception:
+                pass
+                
         await asyncio.sleep(wait_time)
         
         try:
-            # 1. Fetch Task Context
-            task = get_task_by_id(task_id)
-            if not task:
-                continue
             
             # 🛑 BREAK: Check for user-requested stop or pause
             while task['status'] == 'PAUSED':

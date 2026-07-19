@@ -43,9 +43,17 @@ def init_db():
             status TEXT DEFAULT 'SCRAPING',
             storage_kb INTEGER DEFAULT 0,
             last_msg_id INTEGER,
+            next_post_time INTEGER DEFAULT 0,
             start_time DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # Try adding the column if table already exists
+    try:
+        conn.execute("ALTER TABLE tasks ADD COLUMN next_post_time INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
     
     # NEW TABLES FOR MULTI-CHANNEL & AUTO-CHECK LOGIC
     # Source channels (YouTube, X, etc.)
@@ -197,6 +205,11 @@ def mark_as_seen(tweet_id: str, user_id: int, username: str):
         pass # Already exists
     finally:
         conn.close()
+
+def set_task_next_post_time(task_id: int, next_time: int):
+    with get_db_connection() as conn:
+        conn.execute("UPDATE tasks SET next_post_time = ? WHERE task_id = ?", (next_time, task_id))
+        conn.commit()
 
 def set_setting(user_id: int, key: str, value: str):
     """
