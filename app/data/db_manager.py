@@ -130,6 +130,18 @@ def init_db():
             UNIQUE(source_channel_id, telegram_channel_id)
         )
     ''')
+
+    # NEW TABLE: saved_targets (For manual quick harvest CRUD)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS saved_targets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            platform TEXT NOT NULL,
+            target_username TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, platform, target_username)
+        )
+    ''')
     
     # 🔁 GLOBAL MIGRATION: Ensure all tables match the Enterprise Blueprint
     cursor = conn.cursor()
@@ -208,6 +220,41 @@ def get_setting(user_id: int, key: str, default=None):
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else default
+
+def add_saved_target(user_id: int, platform: str, target_username: str) -> bool:
+    """Adds a new saved target for the user. Returns True if added, False if duplicate."""
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "INSERT INTO saved_targets (user_id, platform, target_username) VALUES (?, ?, ?)",
+            (user_id, platform, target_username)
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def get_saved_targets(user_id: int, platform: str = None) -> list:
+    """Gets saved targets for a user, optionally filtered by platform."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    if platform:
+        cursor.execute("SELECT id, platform, target_username FROM saved_targets WHERE user_id = ? AND platform = ? ORDER BY id", (user_id, platform))
+    else:
+        cursor.execute("SELECT id, platform, target_username FROM saved_targets WHERE user_id = ? ORDER BY platform, id", (user_id,))
+    results = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return results
+
+def delete_saved_target(target_id: int, user_id: int):
+    """Deletes a saved target."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("DELETE FROM saved_targets WHERE id = ? AND user_id = ?", (target_id, user_id))
+    conn.commit()
+    conn.close()
 
 from typing import Optional, Dict
 from app.data.db_task_layer import (

@@ -83,6 +83,34 @@ async def x_link_handler(message: types.Message):
     await status_msg.delete()
 
 
+@router.message(F.text.contains("youtube.com/watch") | F.text.contains("youtu.be/") | F.text.contains("youtube.com/shorts"))
+async def youtube_link_handler(message: types.Message):
+    url = message.text.strip()
+    status_msg = await message.answer("🔍 **Processing YouTube link...**")
+    
+    from app.services.youtube_scraper import youtube_scraper
+    url_type = youtube_scraper.classify_url(url)
+    
+    if url_type in ('single_video', 'shorts_video'):
+        meta = await youtube_scraper.get_video_info(url)
+        if meta and not meta.get('error'):
+            card = (
+                f"🎬 **{meta['title']}**\n"
+                f"⏱️ Duration: {meta['duration_formatted']}\n"
+                f"👀 Views: {meta['view_count']}\n"
+                f"Queueing for download..."
+            )
+            await status_msg.edit_text(card)
+            
+            task_id = create_task(message.from_user.id, "Direct YT Link")
+            await harvester_queue.put((url, message.from_user.id, task_id))
+        else:
+            await status_msg.edit_text(f"❌ Error fetching YouTube metadata.")
+    else:
+        # Ignore channel links here, they should use the YT Harvest button
+        await status_msg.edit_text("ℹ️ For channel scraping, use the **▶️ YT Harvest** button from the main menu.")
+
+
 @router.message(Command("scrape"))
 async def scrape_handler(message: types.Message, command: CommandObject):
     """
@@ -97,7 +125,19 @@ async def scrape_handler(message: types.Message, command: CommandObject):
     username = parts[0]
     limit = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 20
     
-    status_msg = await message.answer(f"🔍 **Radar Engaged:** Harvesting last {limit} media from {username}...")
+    await execute_scrape_internal(message, username, "twitter", limit)
+
+
+async def execute_scrape_internal(message: types.Message, username: str, platform: str, override_limit: int = None, mode: str = "media"):
+    from app.data.db_manager import get_setting
+    from app.services.ig_scraper import scrape_ig_profile_media
+    
+    limit_str = get_setting(message.from_user.id, "harvest_limit")
+    limit = override_limit or (int(limit_str) if limit_str else 20)
+    
+    mode_label = "Full Timeline" if mode == "timeline" else "Media Tab"
+    status_msg = await message.answer(f"🔍 **Radar Engaged [{mode_label}]:** Harvesting last {limit} media from `{username}` ({platform})...")
+
     
     # 1. Spawn Task
     task_id = create_task(message.from_user.id, username)
@@ -109,12 +149,16 @@ async def scrape_handler(message: types.Message, command: CommandObject):
         except Exception:
             pass
             
-    links = await scrape_profile_media(username, message.from_user.id, limit, status_callback=update_status)
+    if platform == "instagram":
+        links = await scrape_ig_profile_media(username, message.from_user.id, limit, status_callback=update_status)
+    else:
+        links = await scrape_profile_media(username, message.from_user.id, limit, status_callback=update_status, mode=mode)
     
     if not links:
         from app.data.db_manager import set_task_status
         set_task_status(task_id, 'STOPPED')
-        await status_msg.edit_text(f"❌ **Radar Failure:** No new media found for {username}.")
+        await status_msg.edit_text(f"❌ **Radar Failure:** No new media found for `{username}`.")
+
         return
         
     # 3. Load Conveyor Belt
@@ -123,8 +167,9 @@ async def scrape_handler(message: types.Message, command: CommandObject):
         await harvester_queue.put((link, message.from_user.id, task_id))
         
     await status_msg.edit_text(
-        f"✅ **Harvester Loaded for @{username}:**\n"
+        f"✅ **Harvester Loaded for** `@{username}`:\n"
         f"Found {len(links)} new tracks.\n"
         f"Dashboard engaged. Processing with Jitter logic.",
         reply_markup=get_dashboard_keyboard(message.from_user.id)
     )
+

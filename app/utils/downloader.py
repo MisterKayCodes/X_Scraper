@@ -6,6 +6,10 @@ import yt_dlp
 import os
 import asyncio
 
+# Always resolve cookies relative to the project root (two levels up from app/utils/)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_COOKIES_PATH = _PROJECT_ROOT / 'youtube_cookies.txt'
+
 def log(msg, level="INFO", quiet=False):
     if not quiet:
         print(f"[{level}] {msg}")
@@ -56,14 +60,17 @@ def download_file(url: str, dest_path: Path, headers: dict, quiet=False):
         log(f"Download failed for {url}: {e}", "ERROR", quiet=quiet)
         return False
 
-async def check_file_size(content_url: str, max_size_mb: int = 50) -> dict:
-    """Pre-flight check to get video size and ensure it's under max_size_mb."""
+async def check_file_size(content_url: str, max_size_mb: int = 50, max_duration_seconds: int = None) -> dict:
+    """Pre-flight check to get video size and ensure it's under limits."""
     max_bytes = max_size_mb * 1024 * 1024
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
+        'extractor_args': {'youtube': ['player_client=android']},
     }
+    if _COOKIES_PATH.exists():
+        ydl_opts['cookiefile'] = str(_COOKIES_PATH)
     
     def check():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -87,10 +94,17 @@ async def check_file_size(content_url: str, max_size_mb: int = 50) -> dict:
                 if filesize is not None:
                     exceeds_limit = filesize > max_bytes
                 
+                duration = info.get('duration', 0)
+                exceeds_duration = False
+                if max_duration_seconds and duration and duration > max_duration_seconds:
+                    exceeds_duration = True
+
                 return {
                     'filesize': filesize,
                     'filesize_mb': round(filesize / (1024 * 1024), 2) if filesize else None,
+                    'duration': duration,
                     'exceeds_limit': exceeds_limit,
+                    'exceeds_duration': exceeds_duration,
                     'size_unknown': filesize is None,
                     'title': info.get('title', '')
                 }
@@ -99,16 +113,22 @@ async def check_file_size(content_url: str, max_size_mb: int = 50) -> dict:
     
     return await asyncio.get_event_loop().run_in_executor(None, check)
 
-async def download_with_ytdlp(url: str, download_dir: Path, check_size_first: bool = True) -> dict:
+async def download_with_ytdlp(url: str, download_dir: Path, check_size_first: bool = True, max_duration_seconds: int = None) -> dict:
     """
     Downloads and remuxes video using yt-dlp to ensure Telegram thumbnails work.
     """
-    if check_size_first:
-        size_info = await check_file_size(url)
+    if check_size_first or max_duration_seconds:
+        size_info = await check_file_size(url, max_duration_seconds=max_duration_seconds)
         if size_info and size_info.get('exceeds_limit'):
             return {
                 'success': False, 
                 'error': f"File size ({size_info.get('filesize_mb', '?')}MB) exceeds 50MB limit."
+            }
+        if size_info and size_info.get('exceeds_duration'):
+            duration = size_info.get('duration', 0)
+            return {
+                'success': False,
+                'error': f"Video duration ({duration//60}m) exceeds limit ({max_duration_seconds//60}m)."
             }
             
     ydl_opts = {
@@ -117,7 +137,10 @@ async def download_with_ytdlp(url: str, download_dir: Path, check_size_first: bo
         'format': 'best[ext=mp4][filesize<50M]/best[ext=mp4]/best',
         'outtmpl': str(download_dir / '%(id)s.%(ext)s'),
         'merge_output_format': 'mp4',
+        'extractor_args': {'youtube': ['player_client=android']},
     }
+    if _COOKIES_PATH.exists():
+        ydl_opts['cookiefile'] = str(_COOKIES_PATH)
     
     def download():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

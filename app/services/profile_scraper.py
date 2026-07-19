@@ -10,15 +10,24 @@ from typing import Callable, Awaitable
 # Ensures only one browser instance runs at a time to prevent OOM on 1GB RAM.
 browser_semaphore = asyncio.Semaphore(1)
 
-async def scrape_profile_media(username: str, user_id: int, limit: int = 20, status_callback: Callable[[str], Awaitable[None]] = None):
+async def scrape_profile_media(username: str, user_id: int, limit: int = 20, status_callback: Callable[[str], Awaitable[None]] = None, mode: str = "media"):
     """
-    Scrapes the media tab of an X profile for direct status links.
+    Scrapes an X profile for direct status links.
+    mode="media"    -> Scans /media tab (UserMedia). Only direct uploads.
+    mode="timeline" -> Scans main timeline (UserTweets). Includes quotes & retweets.
     Returns a list of unique status URLs.
     """
     if username.startswith("@"):
         username = username[1:]
     
-    url = f"https://x.com/{username}/media"
+    # Mode decides which URL and which GraphQL endpoint we intercept
+    if mode == "timeline":
+        url = f"https://x.com/{username}"
+        graphql_key = "UserTweets"
+    else:
+        url = f"https://x.com/{username}/media"
+        graphql_key = "UserMedia"
+
     links = []
     
     if status_callback: await status_callback("🚀 **STATUS:** Initializing Stealth Radar...")
@@ -28,8 +37,10 @@ async def scrape_profile_media(username: str, user_id: int, limit: int = 20, sta
             # Rule: Isolated and Headless
             import os
             import json
-            cookie_path = "app/data/cookies.json"
+            from pathlib import Path
+            cookie_path = str(Path(__file__).resolve().parent.parent / "data" / "cookies.json")
             has_cookies = os.path.exists(cookie_path)
+            print(f"[RADAR] Cookie path: {cookie_path} | Exists: {has_cookies}")
             
             if has_cookies:
                 try:
@@ -108,18 +119,21 @@ async def scrape_profile_media(username: str, user_id: int, limit: int = 20, sta
             intercepted_tweet_ids = set()
 
             async def handle_response(response):
-                if "/graphql/" in response.url and "UserMedia" in response.url:
+                if "/graphql/" in response.url and graphql_key in response.url:
                     try:
                         body = await response.text()
-                        # 1. Look for conversation_id_str which strictly identifies Tweets (not users)
-                        found = re.findall(r'"conversation_id_str":"(\d+)"', body)
-                        # 2. Look for any hardcoded tweet URLs
+                        # 1. Look for rest_id which is the primary tweet ID in modern Twitter GraphQL
+                        found = re.findall(r'"rest_id":"(\d+)"', body)
+                        # 2. Fallback: conversation_id_str (older API responses)
+                        found += re.findall(r'"conversation_id_str":"(\d+)"', body)
+                        # 3. Fallback: hardcoded tweet URLs in payload
                         found += re.findall(r'https://(?:twitter|x)\.com/[^/]+/status/(\d+)', body)
                         
                         for tid in found:
+                            # Tweet IDs are long numbers (>10 digits). Filter out user IDs which are shorter.
                             if tid.isdigit() and len(tid) > 10:
                                 intercepted_tweet_ids.add(tid)
-                        print(f"[RADAR-NET] Intercepted UserMedia! Found {len(found)} tweet IDs. Unique so far: {len(intercepted_tweet_ids)}")
+                        print(f"[RADAR-NET] Intercepted {graphql_key}! Found {len(found)} raw IDs. Unique tweets so far: {len(intercepted_tweet_ids)}")
                     except Exception as e:
                         print(f"[RADAR-NET] Error parsing payload: {e}")
 
@@ -145,6 +159,35 @@ async def scrape_profile_media(username: str, user_id: int, limit: int = 20, sta
                     print(f"[🚨] {error_msg}")
                     if status_callback: await status_callback(f"❌ **Radar Failure:** {error_msg}")
                     return []
+                    
+                # BYPASS: NSFW "Sensitive Content" Warning
+                # Must wait a moment — the wall is rendered by JS AFTER domcontentloaded fires
+                await asyncio.sleep(3)
+                
+                # ---- DIAGNOSTICS ----
+                current_url = page.url
+                page_snapshot = await page.content()
+                print(f"[RADAR-DIAG] Landed URL: {current_url}")
+                print(f"[RADAR-DIAG] Page has 'sensitive' mention: {'sensitive' in page_snapshot.lower()}")
+                # ---------------------
+
+                try:
+                    # Try multiple button texts Twitter uses across regions
+                    nsfw_clicked = False
+                    for btn_text in ["Yes, view profile", "View", "Yes"]:
+                        nsfw_btn = page.get_by_role("button", name=btn_text)
+                        if await nsfw_btn.count() > 0:
+                            print(f"[RADAR] NSFW wall detected! Clicking '{btn_text}' bypass...")
+                            if status_callback: await status_callback("⚠️ **STATUS:** Bypassing NSFW wall...")
+                            await nsfw_btn.first.click()
+                            await asyncio.sleep(3)  # Wait for actual media page to load
+                            nsfw_clicked = True
+                            break
+                    if not nsfw_clicked:
+                        print("[RADAR] No NSFW wall found, proceeding normally.")
+                except Exception as e:
+                    print(f"[RADAR] NSFW bypass error: {e}")
+
                 
                 # Wiggle & Tease the lazy-loading ("Ghost Wall" bypass)
                 for i in range(10):

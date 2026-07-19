@@ -7,12 +7,12 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from app.config import TELEGRAM_BOT_TOKEN, API_PORT
-from app.bot.handlers import router as command_router
-from app.bot.callbacks import router as callback_router
+from app.bot.handlers import register_handlers
 from app.data.db_manager import init_db
 from app.bot.queue_worker import queue_consumer
 from app.services.scheduler import run_auto_check_loop
 from app.api import app as fastapi_app
+from app.bot.middleware import LoggingMiddleware
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
@@ -41,13 +41,15 @@ async def main():
         default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
     )
     dp = Dispatcher()
+    
+    # Register Middleware
+    dp.update.middleware(LoggingMiddleware())
 
     # Initialize Database
     init_db()
 
     # Register Routers
-    dp.include_router(command_router)
-    dp.include_router(callback_router)
+    dp.include_router(register_handlers())
 
     # Start ALL layers simultaneously
     logger.info("🚀 Mister Assistant is launching all systems...")

@@ -69,6 +69,26 @@ async def run_scrape_process(username: str, limit: int, destination_id: str, use
 async def health_check():
     return {"status": "healthy", "service": "x-scraper-api"}
 
+@app.get("/status")
+async def status_report():
+    """
+    Returns a global health and status report for the Supervisor bot.
+    """
+    from app.data.db_manager import get_user_aggregated_stats, get_active_task
+    from app.bot.queue_worker import harvester_queue
+    
+    stats = get_user_aggregated_stats(0)
+    q_size = harvester_queue.qsize()
+    active_task = get_active_task(0)
+    
+    return {
+        "bot_name": "X Scraper",
+        "status": "Running",
+        "queue_size": q_size,
+        "total_posts": stats.get('all_time_success', 0),
+        "active_task": active_task['target_user'] if active_task else None
+    }
+
 @app.post("/scrape")
 async def trigger_scrape(request: ScrapeRequest, background_tasks: BackgroundTasks, _ = Depends(verify_api_key)):
     """

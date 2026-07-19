@@ -1,20 +1,22 @@
 from aiogram import Router, types, F
+from aiogram.fsm.context import FSMContext
+from app.bot.states import HarvestStates
 from app.data.db_manager import (
     get_setting, create_task, get_active_task, 
     set_task_status, get_task_by_id
 )
 from app.bot.keyboards import get_settings_keyboard, get_verify_keyboard, get_dashboard_keyboard
-from app.bot.handlers import user_states 
 from app.services.profile_scraper import scrape_profile_media
 from app.services.ig_scraper import scrape_ig_profile_media
 from app.bot.queue_worker import harvester_queue
 
+from app.bot.preflight import resume_pending_action
+
 router = Router()
 
-@router.callback_query(F.data == "set_channel")
-async def cb_set_channel(callback: types.CallbackQuery):
-    from app.bot.handlers import user_states
-    user_states[callback.from_user.id] = "awaiting_channel_id"
+@router.callback_query(F.data == "set_destination")
+async def cb_set_channel(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(HarvestStates.awaiting_channel_id)
     text = (
         "🔗 **Set Destination Channel**\n\n"
         "You can link your channel in **one of three ways**:\n"
@@ -25,25 +27,32 @@ async def cb_set_channel(callback: types.CallbackQuery):
     await callback.message.edit_text(text, reply_markup=get_verify_keyboard())
     await callback.answer()
 
-@router.callback_query(F.data == "set_target")
-async def cb_set_target(callback: types.CallbackQuery):
-    from app.bot.handlers import user_states
-    user_states[callback.from_user.id] = "awaiting_target_user"
-    await callback.message.edit_text("🐦 **Type the X (Twitter) Username to track by default** (e.g. `@MisterKayCodes`):", reply_markup=get_verify_keyboard())
-    await callback.answer()
+@router.callback_query(F.data.startswith("pf_set_dest|"))
+async def cb_pf_set_dest(callback: types.CallbackQuery, state: FSMContext):
+    channel_id = callback.data.replace("pf_set_dest|", "")
+    from app.data.db_manager import set_setting
+    set_setting(callback.from_user.id, "destination_channel_id", channel_id)
+    await callback.answer("✅ Channel selected!", show_alert=False)
+    # Resume the pending action
+    await resume_pending_action(callback, state)
 
-@router.callback_query(F.data == "set_ig_target")
-async def cb_set_ig_target(callback: types.CallbackQuery):
-    from app.bot.handlers import user_states
-    user_states[callback.from_user.id] = "awaiting_ig_target_user"
-    await callback.message.edit_text("📸 **Type the Instagram Username to track by default** (e.g. `@nasa` or just `nasa`):", reply_markup=get_verify_keyboard())
-    await callback.answer()
+@router.callback_query(F.data == "pf_set_new_dest")
+async def cb_pf_set_new_dest(callback: types.CallbackQuery, state: FSMContext):
+    # This just redirects to the normal set_destination flow, but keeps pending_action intact
+    await cb_set_channel(callback, state)
+
+
 
 @router.callback_query(F.data == "set_limit")
-async def cb_set_limit(callback: types.CallbackQuery):
-    from app.bot.handlers import user_states
-    user_states[callback.from_user.id] = "awaiting_harvest_limit"
-    await callback.message.edit_text("🔢 **Type the maximum number of videos to scrape per harvest** (e.g. `10`, `50`, `100`):", reply_markup=get_verify_keyboard())
+async def cb_set_limit(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(HarvestStates.awaiting_harvest_limit)
+    await callback.message.edit_text("🔢 **Enter the new maximum number of items to harvest per run (e.g., 20):**")
+    await callback.answer()
+
+@router.callback_query(F.data == "set_duration")
+async def cb_set_duration(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(HarvestStates.awaiting_max_duration)
+    await callback.message.edit_text("⏱️ **Enter the max duration for videos in minutes (e.g., 10):**\nVideos longer than this will be skipped.")
     await callback.answer()
 
 @router.callback_query(F.data == "verify_channel")
@@ -59,27 +68,35 @@ async def cb_verify(callback: types.CallbackQuery):
     except Exception as e:
         await callback.answer(f"❌ Verification Failed: {e}", show_alert=True)
 
-@router.callback_query(F.data == "back_to_settings")
-async def cb_back(callback: types.CallbackQuery):
-    from app.bot.handlers import user_states
-    user_states.pop(callback.from_user.id, None)
+@router.callback_query(F.data.in_(["settings_menu", "back_to_settings"]))
+async def cb_back(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.message.edit_text("🛠️ **Mister Assistant Settings**\nManage your destination and targets below:", reply_markup=get_settings_keyboard())
     await callback.answer()
 
 @router.callback_query(F.data.in_(["setup_harvest_x", "setup_harvest_ig"]))
-async def cb_setup(callback: types.CallbackQuery):
+async def cb_setup(callback: types.CallbackQuery, state: FSMContext = None):
+    # If state is None (e.g. dummy callback from preflight), we might not be able to do FSMContext operations.
+    # But aiogram injects state automatically if requested.
     is_ig = (callback.data == "setup_harvest_ig")
     platform_name = "Instagram" if is_ig else "X (Twitter)"
     
     # Use the correct target key for each platform
     target_key = "ig_default_target" if is_ig else "default_target"
     target = get_setting(callback.from_user.id, target_key)
-    channel = get_setting(callback.from_user.id, "destination_channel_id")
     
     if not target:
         platform_label = "IG" if is_ig else "X"
         await callback.answer(f"🚨 No {platform_label} target set! Go to Settings → Set {platform_label} Target first.", show_alert=True)
         return
+        
+    from app.bot.preflight import check_destination_preflight
+    # Check preflight. If it intercepts, it will return False.
+    if state and not await check_destination_preflight(callback, state, f"cb_setup|{callback.data}"):
+        return
+    # If state is None, it means we are already resuming from preflight, so we know destination is set.
+    
+    channel = get_setting(callback.from_user.id, "destination_channel_id")
     if not channel:
         await callback.answer("🚨 No destination channel set! Go to Settings → Set Destination first.", show_alert=True)
         return

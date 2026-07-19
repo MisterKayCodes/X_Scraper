@@ -48,7 +48,6 @@ async def queue_consumer(bot: Bot):
             # 1. Fetch Task Context
             task = get_task_by_id(task_id)
             if not task:
-                harvester_queue.task_done()
                 continue
             
             # 🛑 BREAK: Check for user-requested stop or pause
@@ -60,25 +59,28 @@ async def queue_consumer(bot: Bot):
             
             if not task or task['status'] == 'STOPPED':
                 print(f"[🛑] Task {task_id} was STOPPED. Skipping item.")
-                harvester_queue.task_done()
                 continue
                 
             # Pre-flight Admin Check
             target_channel = get_setting(user_id, "destination_channel_id")
             if target_channel:
-                try:
-                    chat_member = await bot.get_chat_member(target_channel, bot.id)
-                    if chat_member.status not in ["administrator", "creator"]:
-                        if user_id and user_id > 0:
-                            await bot.send_message(user_id, f"🚨 **Pre-flight Error**: I am not an admin in the target channel `{target_channel}`! Please promote me.")
-                        log_processed_item(task_id, success=False)
-                        harvester_queue.task_done()
-                        continue
-                except Exception as e:
+                from app.utils.validators import verify_bot_is_admin
+                admin_check = await verify_bot_is_admin(bot, target_channel)
+                
+                if not admin_check['is_valid']:
                     if user_id and user_id > 0:
-                        await bot.send_message(user_id, f"🚨 **Pre-flight Error**: Could not verify admin status in `{target_channel}`. Error: {e}")
-                    log_processed_item(task_id, success=False)
-                    harvester_queue.task_done()
+                        await bot.send_message(
+                            user_id, 
+                            f"🚨 **Task Paused**\n\n"
+                            f"I cannot post to `{target_channel}`:\n"
+                            f"_{admin_check['error_message']}_\n\n"
+                            f"Task ID `{task_id}` has been paused. Fix the permissions or change your destination, then resume the task."
+                        )
+                    set_task_status(task_id, 'PAUSED')
+                    # We push the item back to the queue or just skip it? 
+                    # If we skip it, it fails. We can put it back at the end of the queue.
+                    # Or we just skip this attempt, but since the task is now paused, it will get retried if pushed back.
+                    await harvester_queue.put(item)
                     continue
 
             if url.startswith("ig_"):

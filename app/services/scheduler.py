@@ -8,7 +8,7 @@ from app.data.db_advanced import (
 from app.services.youtube_scraper import youtube_scraper
 from app.services.profile_scraper import scrape_profile_media
 from app.bot.queue_worker import harvester_queue
-from app.data.db_manager import create_task, update_task_meta
+from app.data.db_manager import create_task, update_task_meta, get_setting
 
 logger = logging.getLogger("scheduler")
 
@@ -53,9 +53,22 @@ async def run_auto_check_loop():
                     if new_items:
                         logger.info(f"[SCHEDULER] Found {len(new_items)} new items for {url}")
                         task_id = create_task(user_id, url)
-                        update_task_meta(task_id, len(new_items), 0)
+                        
+                        max_dur = int(get_setting(user_id, "max_duration_seconds") or 600)
+                        valid_items = []
                         
                         for item in new_items:
+                            if platform == 'youtube':
+                                dur = item.get('duration')
+                                if dur is None:
+                                    dur = await youtube_scraper.get_video_duration(item['content_url'])
+                                if dur and dur > max_dur:
+                                    continue # Skip
+                            valid_items.append(item)
+                            
+                        update_task_meta(task_id, len(valid_items), 0)
+                        
+                        for item in valid_items:
                             await add_scraped_content(
                                 source_channel_id=source_id,
                                 platform=platform,

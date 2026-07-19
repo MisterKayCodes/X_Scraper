@@ -1,9 +1,25 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram import Router, types, F
 from app.data.db_manager import (
     get_setting, create_task, get_active_task, 
     set_task_status, get_task_by_id
 )
+
+def get_main_reply_keyboard():
+    """
+    Persistent Main Menu Keyboard (Reply Keyboard)
+    """
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🐦 X Harvest"), KeyboardButton(text="📸 IG Harvest"), KeyboardButton(text="▶️ YT Harvest")],
+            [KeyboardButton(text="📊 Stats"), KeyboardButton(text="📺 Add Source"), KeyboardButton(text="⏰ Auto-Check")],
+            [KeyboardButton(text="⚙️ Settings"), KeyboardButton(text="🔍 Verify Channel")],
+            [KeyboardButton(text="📝 Logs")]
+        ],
+        resize_keyboard=True,
+        persistent=True
+    )
+    return keyboard
 
 def get_dashboard_keyboard(user_id: int):
     """
@@ -31,29 +47,48 @@ def get_dashboard_keyboard(user_id: int):
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def get_settings_keyboard(user_id: int = 0, context: str = "settings"):
+def get_settings_keyboard():
     """
-    Main Control Center Keyboard.
-    If context is 'harvester_hud', it adds a Stop button.
+    Control Panel for global settings.
     """
-    buttons = [
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📡 Set Destination", callback_data="set_channel"),
-            InlineKeyboardButton(text="✅ Verify Channel Access", callback_data="verify_channel")
+            InlineKeyboardButton(text="🎯 Manage Targets", callback_data="manage_targets")
         ],
         [
-            InlineKeyboardButton(text="🐦 Set X Target", callback_data="set_target"),
-            InlineKeyboardButton(text="📸 Set IG Target", callback_data="set_ig_target")
+            InlineKeyboardButton(text="📡 Set Destination Channel", callback_data="set_destination")
         ],
         [
-            InlineKeyboardButton(text="🔢 Set Harvest Limit", callback_data="set_limit")
+            InlineKeyboardButton(text="🔢 Set Harvest Limit", callback_data="set_limit"),
+            InlineKeyboardButton(text="⏱️ Set Max Duration", callback_data="set_duration")
         ]
-    ]
+    ])
+    return keyboard
+
+def get_targets_keyboard(platform: str, targets: list):
+    """
+    Shows a list of saved targets for a specific platform.
+    """
+    buttons = []
+    for t in targets:
+        buttons.append([InlineKeyboardButton(text=f"❌ Delete {t['target_username']}", callback_data=f"del_target_{t['id']}")])
     
-    if context == "harvester_hud":
-        buttons.insert(0, [InlineKeyboardButton(text="🛑 Stop Harvester", callback_data="stop_harvest")])
+    # Add new button at the bottom
+    buttons.append([InlineKeyboardButton(text="➕ Add New Target", callback_data=f"add_target_{platform}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Back to Settings", callback_data="back_to_settings")])
     
-    buttons.append([InlineKeyboardButton(text="❌ Close Menu", callback_data="close_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_harvest_target_selection(platform: str, targets: list):
+    """
+    Shows a list of saved targets to click and start harvesting immediately.
+    """
+    buttons = []
+    for t in targets:
+        buttons.append([InlineKeyboardButton(text=t['target_username'], callback_data=f"run_harvest_{platform}_{t['id']}")])
+        
+    buttons.append([InlineKeyboardButton(text="➕ Type a new one...", callback_data=f"type_new_target_{platform}")])
+    
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_verify_keyboard():
@@ -72,4 +107,17 @@ def get_start_keyboard():
     buttons = [
         [InlineKeyboardButton(text="🛠️ Open Settings Menu", callback_data="back_to_settings")]
     ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_preflight_destination_keyboard(channels: list):
+    """
+    Keyboard for selecting a destination channel during pre-flight check.
+    """
+    buttons = []
+    for ch in channels:
+        label = ch.get('channel_title') or ch.get('channel_id')
+        buttons.append([InlineKeyboardButton(text=f"📡 {label}", callback_data=f"pf_set_dest|{ch['channel_id']}")])
+        
+    buttons.append([InlineKeyboardButton(text="➕ Add New Channel", callback_data="pf_set_new_dest")])
+    buttons.append([InlineKeyboardButton(text="❌ Cancel", callback_data="close_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
