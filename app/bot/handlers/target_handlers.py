@@ -132,5 +132,6 @@ async def cb_run_saved_target(callback: types.CallbackQuery, state: FSMContext =
         )
     else:
         await callback.message.edit_text(f"🚀 Starting harvest for {target_username}...")
-        await execute_scrape_internal(callback.message, target_username, platform)
+        await execute_scrape_internal(callback.message, callback.from_user.id, target_username, platform)
+
 

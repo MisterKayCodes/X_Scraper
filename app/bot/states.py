@@ -2,6 +2,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 class HarvestStates(StatesGroup):
     awaiting_x_target = State()
+    awaiting_x_limit = State()
     awaiting_ig_target = State()
     awaiting_yt_url = State()
     awaiting_yt_limit = State()

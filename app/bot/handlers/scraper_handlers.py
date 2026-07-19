@@ -125,14 +125,14 @@ async def scrape_handler(message: types.Message, command: CommandObject):
     username = parts[0]
     limit = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 20
     
-    await execute_scrape_internal(message, username, "twitter", limit)
+    await execute_scrape_internal(message, message.from_user.id, username, "twitter", limit)
 
 
-async def execute_scrape_internal(message: types.Message, username: str, platform: str, override_limit: int = None, mode: str = "media"):
+async def execute_scrape_internal(message: types.Message, user_id: int, username: str, platform: str, override_limit: int = None, mode: str = "media"):
     from app.data.db_manager import get_setting
     from app.services.ig_scraper import scrape_ig_profile_media
     
-    limit_str = get_setting(message.from_user.id, "harvest_limit")
+    limit_str = get_setting(user_id, "harvest_limit")
     limit = override_limit or (int(limit_str) if limit_str else 20)
     
     mode_label = "Full Timeline" if mode == "timeline" else "Media Tab"
@@ -140,7 +140,7 @@ async def execute_scrape_internal(message: types.Message, username: str, platfor
 
     
     # 1. Spawn Task
-    task_id = create_task(message.from_user.id, username)
+    task_id = create_task(user_id, username)
     
     # 2. Scrape links using Headless Radar
     async def update_status(text: str):
@@ -150,9 +150,9 @@ async def execute_scrape_internal(message: types.Message, username: str, platfor
             pass
             
     if platform == "instagram":
-        links = await scrape_ig_profile_media(username, message.from_user.id, limit, status_callback=update_status)
+        links = await scrape_ig_profile_media(username, user_id, limit, status_callback=update_status)
     else:
-        links = await scrape_profile_media(username, message.from_user.id, limit, status_callback=update_status, mode=mode)
+        links = await scrape_profile_media(username, user_id, limit, status_callback=update_status, mode=mode)
     
     if not links:
         from app.data.db_manager import set_task_status
@@ -164,12 +164,12 @@ async def execute_scrape_internal(message: types.Message, username: str, platfor
     # 3. Load Conveyor Belt
     update_task_meta(task_id, len(links), status_msg.message_id)
     for link in links:
-        await harvester_queue.put((link, message.from_user.id, task_id))
+        await harvester_queue.put((link, user_id, task_id))
         
     await status_msg.edit_text(
         f"✅ **Harvester Loaded for** `@{username}`:\n"
         f"Found {len(links)} new tracks.\n"
         f"Dashboard engaged. Processing with Jitter logic.",
-        reply_markup=get_dashboard_keyboard(message.from_user.id)
+        reply_markup=get_dashboard_keyboard(user_id)
     )
 
