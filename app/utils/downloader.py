@@ -67,7 +67,7 @@ async def check_file_size(content_url: str, max_size_mb: int = 50, max_duration_
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'extractor_args': {'youtube': ['player_client=android']},
+        'extractor_args': {'youtube': ['player_client=android,mweb']},
     }
     if _COOKIES_PATH.exists():
         ydl_opts['cookiefile'] = str(_COOKIES_PATH)
