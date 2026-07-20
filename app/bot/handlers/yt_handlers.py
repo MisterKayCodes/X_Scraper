@@ -258,7 +258,10 @@ async def execute_yt_harvest(message: types.Message, user_id: int, url: str, fil
             
         dur = item.get('duration')
         if dur is None:
-            dur = await youtube_scraper.get_video_duration(item['content_url'])
+            if "/shorts/" in item['content_url'] or "/short/" in item['content_url']:
+                dur = 60
+            else:
+                dur = await youtube_scraper.get_video_duration(item['content_url'])
             
         if dur and dur > max_dur:
             skipped_count += 1
