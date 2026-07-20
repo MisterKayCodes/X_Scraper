@@ -199,12 +199,17 @@ async def queue_consumer(bot: Bot):
                 if not result.get("success"):
                     err = result.get("error", "Unknown error")
                     print(f"[🚨] YouTube download failed for {url}: {err}")
-                    log_processed_item(task_id, success=False)
+                    set_task_status(task_id, 'PAUSED')
                     if user_id and user_id > 0:
                         try:
-                            await bot.send_message(user_id, f"❌ **YouTube Download Failed:** {err}")
+                            await bot.send_message(
+                                user_id, 
+                                f"🚨 **Task Paused!** YouTube Download Failed for `{url}`:\n\n{err}\n\n"
+                                f"Task ID `{task_id}` has been paused. Please resolve the issue (e.g. update cookies) and click **Resume Harvester**."
+                            )
                         except:
                             pass
+                    await harvester_queue.put(item)
                     harvester_queue.task_done()
                     continue
 
