@@ -67,7 +67,7 @@ async def check_file_size(content_url: str, max_size_mb: int = 50, max_duration_
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'extractor_args': {'youtube': ['player_client=android,mweb']},
+        'extractor_args': {'youtube': ['player_client=web']},
     }
     if _COOKIES_PATH.exists():
         ydl_opts['cookiefile'] = str(_COOKIES_PATH)
@@ -137,7 +137,7 @@ async def download_with_ytdlp(url: str, download_dir: Path, check_size_first: bo
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
         'outtmpl': str(download_dir / '%(id)s.%(ext)s'),
         'merge_output_format': 'mp4',
-        'extractor_args': {'youtube': ['player_client=android,mweb']},
+        'extractor_args': {'youtube': ['player_client=web']},
     }
     if _COOKIES_PATH.exists():
         ydl_opts['cookiefile'] = str(_COOKIES_PATH)

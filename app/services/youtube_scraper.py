@@ -66,7 +66,7 @@ class YouTubeScraper:
             'no_warnings': True,
             'extract_flat': True,
             'playlist_items': '0',
-            'extractor_args': {'youtube': ['player_client=android,mweb']},
+            'extractor_args': {'youtube': ['player_client=web']},
         }
         import os
         if _COOKIES_PATH.exists():
@@ -76,7 +76,7 @@ class YouTubeScraper:
             'no_warnings': True,
             'extract_flat': True,
             'ignoreerrors': True,
-            'extractor_args': {'youtube': ['player_client=android,mweb']},
+            'extractor_args': {'youtube': ['player_client=web']},
         }
         if _COOKIES_PATH.exists():
             count_opts['cookiefile'] = str(_COOKIES_PATH)
@@ -141,7 +141,7 @@ class YouTubeScraper:
             'quiet': True,
             'no_warnings': True,
             'skip_download': True,
-            'extractor_args': {'youtube': ['player_client=android,mweb']},
+            'extractor_args': {'youtube': ['player_client=web']},
         }
         if _COOKIES_PATH.exists():
             opts['cookiefile'] = str(_COOKIES_PATH)
@@ -214,7 +214,7 @@ class YouTubeScraper:
             'no_warnings': True,
             'extract_flat': True,
             'ignoreerrors': True,
-            'extractor_args': {'youtube': ['player_client=android,mweb']},
+            'extractor_args': {'youtube': ['player_client=web']},
         }
         if _COOKIES_PATH.exists():
             ydl_opts['cookiefile'] = str(_COOKIES_PATH)
