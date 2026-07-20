@@ -147,6 +147,13 @@ async def cb_resume(callback: types.CallbackQuery):
     await callback.answer("▶️ Harvester Resumed.", show_alert=True)
     await callback.message.edit_reply_markup(reply_markup=get_dashboard_keyboard(callback.from_user.id))
 
+@router.callback_query(F.data.startswith("skip_task:"))
+async def cb_skip(callback: types.CallbackQuery):
+    task_id = int(callback.data.split(":")[1])
+    set_task_status(task_id, "SKIP_CURRENT")
+    await callback.answer("⏭️ Skipping item and resuming...", show_alert=True)
+    await callback.message.edit_reply_markup(reply_markup=get_dashboard_keyboard(callback.from_user.id))
+
 @router.callback_query(F.data.startswith("stop_task:"))
 async def cb_stop(callback: types.CallbackQuery):
     task_id = int(callback.data.split(":")[1])

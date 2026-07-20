@@ -14,7 +14,7 @@ def get_main_reply_keyboard():
             [KeyboardButton(text="🐦 X Harvest"), KeyboardButton(text="📸 IG Harvest"), KeyboardButton(text="▶️ YT Harvest")],
             [KeyboardButton(text="📊 Stats"), KeyboardButton(text="📺 Add Source"), KeyboardButton(text="🤖 Auto-Harvest")],
             [KeyboardButton(text="⚙️ Settings"), KeyboardButton(text="🔍 Verify Channel")],
-            [KeyboardButton(text="📝 Logs")]
+            [KeyboardButton(text="📋 Active Tasks"), KeyboardButton(text="📝 Logs")]
         ],
         resize_keyboard=True,
         persistent=True
@@ -35,7 +35,10 @@ def get_dashboard_keyboard(user_id: int):
         # State-Based Controls
         status = task.get('status', 'IDLE')
         if status == "PAUSED":
-            buttons.append([InlineKeyboardButton(text="▶️ Resume Harvester", callback_data=f"resume_task:{task['task_id']}")])
+            buttons.append([
+                InlineKeyboardButton(text="▶️ Retry & Resume", callback_data=f"resume_task:{task['task_id']}"),
+                InlineKeyboardButton(text="⏭️ Skip & Resume", callback_data=f"skip_task:{task['task_id']}")
+            ])
         else:
             buttons.append([InlineKeyboardButton(text="⏸️ Pause Harvester", callback_data=f"pause_task:{task['task_id']}")])
             

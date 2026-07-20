@@ -174,3 +174,36 @@ async def execute_scrape_internal(message: types.Message, user_id: int, username
         reply_markup=get_dashboard_keyboard(user_id)
     )
 
+@router.message(F.text == "📋 Active Tasks")
+async def tasks_button_handler(message: types.Message):
+    """
+    Usage: Click '📋 Active Tasks' button
+    Brings up the Dashboard for the currently active or paused task.
+    """
+    from app.data.db_manager import get_active_task
+    
+    task = get_active_task(message.from_user.id)
+    if not task:
+        await message.answer("ℹ️ **No active or paused tasks.**\nUse the main menu to start a new harvest.")
+        return
+        
+    efficiency = (task['success_count'] / max(1, task['processed_count'])) * 100
+    storage_mb = task['storage_kb'] / 1024
+    
+    remaining = task['total_items'] - task['processed_count']
+    eta_m = (remaining * 20) // 60
+    
+    stats_text = (
+        f"📊 **Enterprise Stats Card**\n"
+        f"───────────────────\n"
+        f"🎯 **Target:** @{task['target_username'].replace('@', '')}\n"
+        f"⏳ **Status:** {task['status']}\n\n"
+        f"📈 **Efficiency:** {efficiency:.1f}%\n"
+        f"📦 **Processed:** {task['processed_count']} / {task['total_items']}\n"
+        f"💾 **Storage Saved:** {storage_mb:.2f} MB\n"
+        f"⏱️ **ETA:** ~{int(eta_m)} mins remaining\n"
+        f"───────────────────"
+    )
+    
+    await message.answer(stats_text, reply_markup=get_dashboard_keyboard(message.from_user.id))
+

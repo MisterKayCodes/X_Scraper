@@ -76,15 +76,21 @@ async def queue_consumer(bot: Bot):
         
         try:
             
-            # 🛑 BREAK: Check for user-requested stop or pause
             while task['status'] == 'PAUSED':
                 await asyncio.sleep(5)
                 task = get_task_by_id(task_id) # Refresh
-                if not task or task['status'] == 'STOPPED':
+                if not task or task['status'] in ('STOPPED', 'SKIP_CURRENT'):
                     break
             
             if not task or task['status'] == 'STOPPED':
                 print(f"[🛑] Task {task_id} was STOPPED. Skipping item.")
+                continue
+                
+            if task['status'] == 'SKIP_CURRENT':
+                print(f"[⏭️] Task {task_id} manually skipped item {url}.")
+                log_processed_item(task_id, success=False)
+                set_task_status(task_id, 'QUEUED')
+                harvester_queue.task_done()
                 continue
                 
             # Pre-flight Admin Check
